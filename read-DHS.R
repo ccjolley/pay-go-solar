@@ -27,8 +27,9 @@ load_dhs <- function(dirname,cname=NULL) {
                     adm0=cname,
                     adm1=labelled_to_str(tmp_hh$hv024),
                     weight=tmp_hh$hv005 / 1e6,
-                    label=dirname)
-  names(tmp) <- c('mobile','elect','wealth','adm0','adm1','weight','label')
+                    label=dirname,
+                    clust=tmp_hh$hv001)
+  names(tmp) <- c('mobile','elect','wealth','adm0','adm1','weight','label','clust')
   tmp$adm0 <- as.character(tmp$adm0)
   tmp$adm1 <- as.character(tmp$adm1)
   tmp$label <- as.character(tmp$label)
@@ -39,10 +40,11 @@ load_dhs <- function(dirname,cname=NULL) {
 }
 
 
-
+eth_2011 <- load_dhs("Ethiopia DHS 2011",'Ethiopia')
 gha_2014 <- load_dhs("Ghana DHS 2014",'Ghana')
 ken_2014 <- load_dhs("Kenya DHS 2014",'Kenya')
 lbr_2013 <- load_dhs("Liberia DHS 2013",'Liberia')
+mwi_2010 <- load_dhs("Malawi DHS 2010",'Malawi')
 nga_2013 <- load_dhs("Nigeria DHS 2013",'Nigeria')
 sen_2014 <- load_dhs("Senegal DHS 2014",'Senegal')
 sle_2013 <- load_dhs("Sierra Leone DHS 2013",'Sierra Leone')
