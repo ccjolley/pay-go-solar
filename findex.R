@@ -2,6 +2,7 @@ library(tidyr)
 library(dplyr)
 library(mice)
 library(ggplot2)
+library(wesanderson)
 
 setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Global Findex")
 gf <- read.csv('a0a7494d-73a3-41ab-a382-13a58f4df93a_Data.csv',
@@ -189,16 +190,21 @@ gf_pa <- gf_wide[gf_wide$country_name %in% pa,]
 gf_pa <- gf_pa[,colSums(is.na(gf_pa)) == 0]
 
 # Visualize
-pa_plot <- function(code) {
+pa_plot <- function(code,country=NULL,default_color='#6cafcc',
+                    highlight_color='#ebe85d') {
   tmp <- gf_pa[,c('country_name',code)]
   names(tmp) <- c('country','value')
   tmp <- arrange(tmp,value)
   tmp$country <- factor(tmp$country,levels=tmp$country)
   tmp$text <- round(tmp$value) %>% paste0('%')
+  tmp$barcolor <- default_color
+  if (!is.null(country)) {
+    tmp[tmp$country==country,'barcolor'] <- highlight_color
+  }
   title <- key[key$series_code==code,'series_name'] %>% 
     gsub(' \\[w2\\]','',.)
   ggplot(tmp,aes(x=country,y=value)) +
-    geom_bar(stat='identity',fill='skyblue') +
+    geom_bar(stat='identity',fill=tmp$barcolor) +
     geom_text(aes(label=text),hjust=-0.1) +
     coord_flip() +
     ggtitle(title) +
@@ -208,12 +214,11 @@ pa_plot <- function(code) {
           axis.text.x = element_blank())
 }
 
-pa_plot('WP14887_7.10') # Account at a financial institution, rural
-pa_plot('WP14918.1')    # Bought from a store on credit
-pa_plot('WP15163_4.1')  # Mobile accts
-pa_plot('WP15163_4.8')  # Mobile accts, poorest 40%
-pa_plot('WP14934.1')    # Received domestic remittances
-pa_plot('WP14928.1')    # Sent domestic remittances
+pa_plot('WP14887_7.10','Nigeria') # Account at a financial institution, rural
+pa_plot('WP14918.1','Nigeria')    # Bought from a store on credit
+pa_plot('WP15163_4.1','Nigeria')  # Mobile accts
+pa_plot('WP15163_4.8','Nigeria')  # Mobile accts, poorest 40%
+pa_plot('WP14934.1','Nigeria')    # Received domestic remittances
+pa_plot('WP14928.1','Nigeria')    # Sent domestic remittances
 
-# TODO: Add ability to highlight a country of interest with another color
 # TODO: Charts for mobile ownership, electrification, fuel subsidies with similar layout
