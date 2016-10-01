@@ -245,5 +245,66 @@ zmb_2014 <- mobile_now(zmb_2014,'Zambia')
 ###############################################################################
 # Clean up
 ###############################################################################
+
 rm(afr_mobile,gsma,gsma_2016,j,wpred,africa,dirroot,fit,fname,n,newvals,pa,x,
    yrs,get_gsma)
+
+###############################################################################
+# Plot for data 1-pager. Keep Ghana and Malawi for comparisons
+###############################################################################
+library(stringr)
+
+tmp1 <- wpred %>% filter(CountryName %in% c('Nigeria','Ghana','Malawi')) %>%
+  mutate(lt = as.factor(ifelse(SurveyYear==2016,2,1)))
+tmp2 <- tmp1 %>% filter(SurveyYear < 2016)
+
+ggplot(tmp1,aes(x=SurveyYear,y=Value,group=CountryName,color=CountryName)) +
+  geom_point(size=4) +
+  geom_line(size=2,linetype=2) +
+  geom_line(data=tmp2,aes(x=SurveyYear,y=Value,group=CountryName,
+                          color=CountryName),size=2,linetype=1) +
+  ylab('Percent of households with mobiles') +
+  xlab('DHS survey year') +
+  annotate('text',x=2014,y=44,hjust=0,
+           label=str_wrap('2016 values predicted based on GSMA data',20)) +
+  theme_classic() +
+  theme(axis.ticks = element_blank(),
+        legend.title=element_blank())
+
+###############################################################################
+# What about broad geographic coverage?
+###############################################################################
+
+mc <- function(df,thresh=0.5) {
+  tmp <- df %>% filter(rural==1) %>%
+    group_by(clust) %>%
+    summarize(mean_mobile = mean(mobile_now==1,na.rm=TRUE))
+  mean(tmp$mean_mobile > thresh,na.rm=TRUE)*100  
+}
+
+mobile_coverage <- data.frame(country=c('Ethiopia','Ghana','Kenya','Liberia','Malawi','Nigeria',
+                     'Senegal','Sierra Leone','Tanzania','Uganda','Rwanda',
+                     'Zambia'),
+           value=c(mc(eth_2011),mc(gha_2014),mc(ken_2014),mc(lbr_2013),
+                      mc(mwi_2010),mc(nga_2013),mc(sen_2014),mc(sle_2013),
+                      mc(tza_2010),mc(uga_2011),mc(rwa_2015),mc(zmb_2014)))
+           
+highlight_bar(mobile_coverage)
+
+wpred %>% filter(SurveyYear==2016) %>% 
+  select(country=CountryName,ownership=Value) %>%
+  plyr::join(mobile_coverage,by='country') %>%
+  rename(coverage=value) %>%
+  ggplot(aes(x=ownership,y=coverage,label=country)) +
+  geom_point() +
+  geom_smooth(method='lm',alpha=0.3) +
+  geom_text(vjust=1) +
+  theme_classic()
+
+lbr_2013 %>% filter(rural==1) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
+lbr_2013 %>% filter(rural==0) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
+
+uga_2011 %>% filter(rural==1) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
+uga_2011 %>% filter(rural==0) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
+
+highlight_bar(mobile_coverage)

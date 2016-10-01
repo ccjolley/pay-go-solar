@@ -46,11 +46,11 @@ for (n in newpts$CountryName) {
   newpts[newpts$CountryName==n,'elect'] <- elect_pred(n)
 }
 
-# rbind(dhs_elect,newpts) %>% # filter(CountryName=='Nigeria') %>%
-#   ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
-#   geom_point(size=4) +
-#   geom_line(size=2) + 
-#   theme_classic()
+rbind(dhs_elect,newpts) %>% # filter(CountryName=='Nigeria') %>%
+  ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
+  geom_point(size=4) +
+  geom_line(size=2) +
+  theme_classic()
 # # That looks somewhat better
 
 ###############################################################################
@@ -165,3 +165,20 @@ tza_2010 <- elect_now(tza_2010,'Tanzania')
 uga_2011 <- elect_now(uga_2011,'Uganda')
 rwa_2015 <- elect_now(rwa_2015,'Rwanda')
 zmb_2014 <- elect_now(zmb_2014,'Zambia')
+
+###############################################################################
+# Plot for data 1-pager. Keep Ghana and Malawi in there to show extremes.
+###############################################################################
+
+dhs_elect %>%  
+  filter(CountryName %in% c('Nigeria','Ghana','Malawi')) %>%
+  ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
+  geom_point(size=4) +
+  geom_line(size=2) + 
+  ylab('Percent of households electrified') +
+  xlab('DHS survey year') +
+  theme_classic() +
+  theme(axis.ticks = element_blank(),
+        legend.title=element_blank())
+
+
