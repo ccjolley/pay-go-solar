@@ -3,7 +3,9 @@ library(dplyr)
 source('utils.R')
 
 ###############################################################################
-# get DHS data
+# Get DHS data. The purpose of this file is to read in all of the DHS files
+# needed for other visualizations.
+#
 # mobile = hv243a (0=no, 1=yes)
 # electricity = hv206 (0=no, 1=yes)
 # wealth = hv271 (divide by 1e5)
@@ -42,7 +44,7 @@ load_dhs <- function(dirname,cname=NULL) {
   tmp
 }
 
-
+# Most recent DHS for Power Africa countries
 eth_2011 <- load_dhs("Ethiopia DHS 2011",'Ethiopia')
 gha_2014 <- load_dhs("Ghana DHS 2014",'Ghana')
 ken_2014 <- load_dhs("Kenya DHS 2014",'Kenya')
@@ -56,8 +58,7 @@ uga_2011 <- load_dhs("Uganda DHS 2011",'Uganda')
 rwa_2015 <- load_dhs("Rwanda DHS 2015",'Rwanda')
 zmb_2014 <- load_dhs('Zambia DHS 2013-4','Zambia')
 
-# It looks like the indicators I need were also present in DHS-V, so we can 
-# go back to older data.
+# Older DHS surveys (DHS-V) containing the same indicators
 gha_2008 <- load_dhs("Ghana DHS 2008",'Ghana')
 ken_2009 <- load_dhs("Kenya DHS 2008-9",'Kenya')
 lbr_2007 <- load_dhs('Liberia DHS 2007','Liberia')
