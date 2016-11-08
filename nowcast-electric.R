@@ -9,11 +9,19 @@ dhs_elect <- loadDHS(indicators='HC_ELEC_H_ELC',
                      countries='ET,GH,KE,LB,MW,NG,RW,SN,SL,TZ,UG,ZM') %>%
   mutate(elect=Value) %>%
   dplyr::select(CountryName,SurveyYear,elect) 
-  
-# ggplot(dhs_elect,aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
-#   geom_point(size=4) +
-#   geom_line(size=2) + 
-#   theme_classic()
+
+dhs_elect %>% 
+  filter(CountryName %in% c('Nigeria','Uganda','Tanzania','Rwanda','Zambia')) %>%
+  mutate(elect=elect/100) %>%
+  ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
+    geom_point(size=4) +
+    geom_line(size=2) +
+    xlab('Year') +
+    ylab('Electricity access') + 
+    theme_classic() +
+    scale_y_continuous(labels = scales::percent) +
+    theme(axis.ticks=element_blank(),
+          legend.title=element_blank())
 
 ###############################################################################
 # Try a linear model to get at electricity access in 2016

@@ -10,7 +10,6 @@ source('utils.R')
 # hh weight = hv005 (divide by 1e6)
 # adm1 = hv024
 ###############################################################################
-# TODO: should add a variable to the column with the (median?) survey date
 load_dhs <- function(dirname,cname=NULL) {
   rootdir <- "C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/"
   dir <- paste0(rootdir,dirname)
@@ -23,18 +22,22 @@ load_dhs <- function(dirname,cname=NULL) {
   }
   tmp <- data.frame(mobile=tmp_hh$hv243a,
                     elect=tmp_hh$hv206,
+                    bank=tmp_hh$hv247,                    
                     wealth=tmp_hh$hv271 / 1e5,
                     adm0=cname,
                     adm1=labelled_to_str(tmp_hh$hv024),
                     weight=tmp_hh$hv005 / 1e6,
                     label=dirname,
+                    rural=as.numeric(tmp_hh$hv025 == 2),
                     clust=tmp_hh$hv001)
-  names(tmp) <- c('mobile','elect','wealth','adm0','adm1','weight','label','clust')
+  names(tmp) <- c('mobile','elect','bank','wealth','adm0','adm1','weight',
+                  'label','rural','clust')
   tmp$adm0 <- as.character(tmp$adm0)
   tmp$adm1 <- as.character(tmp$adm1)
   tmp$label <- as.character(tmp$label)
   tmp$mobile[tmp$mobile==9] <- NA
   tmp$elect[tmp$elect==9] <- NA
+  tmp$bank[tmp$bank > 1] <- NA
   setwd(oldwd)
   tmp
 }

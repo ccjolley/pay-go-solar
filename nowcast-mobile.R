@@ -191,7 +191,7 @@ wpred <- gsma_2016 %>%
   rbind(afr_mobile[afr_mobile$CountryName %in% pa,])
 # ggplot(wpred,aes(x=SurveyYear,y=Value,group=CountryName,color=CountryName)) +
 #   geom_point(size=4) +
-#   geom_line(size=2) + 
+#   geom_line(size=2) +
 #   theme_classic()
 
 ###############################################################################
@@ -308,3 +308,23 @@ uga_2011 %>% filter(rural==1) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
 uga_2011 %>% filter(rural==0) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
 
 highlight_bar(mobile_coverage)
+
+###############################################################################
+# GSMA sample plots
+###############################################################################
+
+gsma_pa <- plyr::ldply(pa[pa != 'South Africa'],function(x) 
+  get_gsma(paste0(dirroot,x,'.csv'),2000:2016))
+
+gsma_pa %>% 
+  filter(CountryName %in% c('Nigeria','Uganda','Rwanda','Tanzania','Zambia')) %>%
+  ggplot(aes(x=SurveyYear,y=penetration_uniq,group=CountryName,
+                     color=CountryName)) +
+    geom_line(size=2) +
+    theme_classic() +
+    xlab('Year') +
+    ylab('Penetration, unique subscribers') +
+    scale_y_continuous(labels = scales::percent) +
+    theme(axis.ticks=element_blank(),
+          legend.title=element_blank())
+   
