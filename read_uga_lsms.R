@@ -1,6 +1,11 @@
 library(haven)
 library(dplyr)
 
+###############################################################################
+# TODO: I can't remember; does this actually get used in the map I made for the
+# report? If not, I can get rid of this.
+###############################################################################
+
 oldwd <- getwd()
 setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Uganda LSMS 2014")
 
