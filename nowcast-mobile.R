@@ -4,6 +4,12 @@ library(XLConnect)
 source('read-DHS.R')
 source('utils.R')
 
+###############################################################################
+# TODO: I want this file to just contain the code I need to update the data
+# frames returned by read-DHS.R to contain estimates of the current 
+# mobile ownership of DHS households. The exploratory stuff that I use
+# to justify my models belongs in a separate file (probably an Rmd).
+###############################################################################
 
 ###############################################################################
 # To what extent does the "sigmoidal" wealth/mobile relationship hold

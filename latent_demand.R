@@ -10,6 +10,11 @@ source('nowcast-mobile.R')
 source('nowcast-electric.R')
 
 ###############################################################################
+# TODO: I want to make sure this file contains only the plots I'm interested
+# in -- not sure how useful the other stuff in here is.
+###############################################################################
+
+###############################################################################
 # Weighted country-level averages
 ###############################################################################
 f <- function(df) {

@@ -4,6 +4,12 @@ library(ggplot2)
 source('read-findex.R')
 
 ###############################################################################
+# Clustering of countries based on their Global Findex data. These plots 
+# didn't make it into the report, but I still think they're interesting enough
+# to keep in the repo.
+###############################################################################
+
+###############################################################################
 # Imputation and PCA
 ###############################################################################
 
