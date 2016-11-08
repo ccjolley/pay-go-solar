@@ -1,6 +1,12 @@
 library(dplyr)
 
 ###############################################################################
+# TODO: I should move any other frequently-reused code into here, for example
+# setting the path for data files. Also using devtools to load llamar, since I
+# shouldn't assume that people have it.
+###############################################################################
+
+###############################################################################
 # for a labelled vector x, replace numeric value with string labels
 ###############################################################################
 labelled_to_str <- function(x) {
