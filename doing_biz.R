@@ -32,13 +32,11 @@ ggplot(db,aes(x=fct_rev(fct_inorder(Country)),y=credit_info))  +
 
 ### Additional plots from Global Findex
 
+source('read-findex.R')
 clist <- c('Nigeria','Rwanda','Tanzania','Uganda','Zambia',
            "Sub-Saharan Africa (developing only)","High income: OECD")
 gf_focus <- gf_wide[gf_wide$country_name %in% clist,] 
-  
-#gf_pa <- gf_pa[,colSums(is.na(gf_pa)) < 2] %>% na.omit
 
-# Visualization function
 focus_plot <- function(code,pcent=TRUE) {
   tmp <- data.frame()
   for (c in clist) {
@@ -71,4 +69,4 @@ focus_plot <- function(code,pcent=TRUE) {
 }
 
 focus_plot('WP14917.1') # Borrowed from a financial inst.
-
+# This function can easily be re-used with any other Findex indicator.
