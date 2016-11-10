@@ -1,0 +1,202 @@
+---
+title: "Exploratory Global Findex Analysis"
+author: "Craig Jolley"
+date: "November 9, 2016"
+output: html_document
+---
+
+This document doesn't correspond to any of the plots in the report; instead it contains some exploratory analysis of the World Bank Global Findex dataset that we used to better understand what the dataset contains and how it could help us learn about PAYG solar markets.
+
+```{r warning=FALSE, message=FALSE}
+library(mice)
+library(ggplot2)
+library(ggrepel)
+library(forcats)
+source('read-findex.R')
+```
+
+The Global Findex dataset contains a lot of missing data, in part because not all indicators are relevant in all countries. Exploration is easier if we first impute missing values. Unfortunately, the ```mice``` imputation library is prohibitively slow on a wide dataset with fairly few instances of many potentially-interrelated variables. If you have much more impressive hardware than I do (or want to restrict to a smaller set of interesting variables), then feel free to give ```mice``` a shot.
+
+```{r impute}
+# system.time(gf_mice <- mice(gf_wide,m=1,method='fastpmm')) 
+# running this for 9.87h got me 631 variable imputations ~ 64/hr
+# 477 varibles x 5 iterations = 2385 imputations = 37.3h
+
+# do manually with medians; not good but will let us do PCA
+gf_imp <- gf_wide[,2:ncol(gf_wide)]
+for (n in names(gf_imp)) {
+  isna <- is.na(gf_imp[,n])
+  gf_imp[isna,n] <- median(gf_imp[!isna,n],na.rm=TRUE)
+}
+```
+
+Next, we will use principal components analysis (PCA) to pull out a smaller number of variables that captures most of the "story" included in the broader set of 685 Findex indicators.
+
+```{r pca}
+pr <- prcomp(gf_imp,center=TRUE,scale=TRUE)
+cum_var <- summary(pr)$importance[3,]
+c90 <- which(cum_var<0.9) %>% tail(1)
+qplot(1:172,cum_var) +
+  theme_classic() +
+  xlab('PC') + ylab('Cumulative variance') +
+  geom_hline(yintercept=cum_var[2],color='tomato') +
+  geom_vline(xintercept=c90,color='olivedrab') +
+  annotate('text',x=4,y=cum_var[2]+0.02,hjust=0,vjust=0,color='tomato',
+           label=paste0('First two components: ',round(cum_var[2],3)*100,'%')) +
+  annotate('text',x=c90+2,y=0.5,hjust=0,color='olivedrab',
+           label=paste0('First ',c90,' PCs contain 90% of variance'))
+```
+
+Visualizing the first two PCs, we can start to see how countries are arranged according to their degree of financial inclusion, and label a few of the extreme cases in either dimension.
+
+```{r scatter1,warning=FALSE}
+plotme <- data.frame(pc1=pr$x[,1],pc2=pr$x[,2],name=gf_wide$country_name,
+                     stringsAsFactors=FALSE)
+ggplot(plotme,aes(x=pc1,y=pc2)) +
+  geom_point(color='lightslateblue',size=2) +
+  xlab('PC 1') + ylab('PC 2') +
+  geom_text_repel(aes(
+    label=ifelse(pc1 > 32 | pc1 < -18 | pc2 < -20 | pc2 > 15,name,NA))) +
+  theme_classic() +
+  theme(axis.ticks = element_blank())
+```
+
+Another way to understand the meanings of the principal components is to ask about the loading factors of each variable, or how strongly each variable contributes to a particular principal component.
+
+```{r loadings1,warning=FALSE}
+df <- data.frame(pc1=pr$rotation[,1],pc2=pr$rotation[,2],
+           series_code=names(pr$scale)) %>%
+    plyr::join(key,by='series_code') %>%
+    mutate(series_name = gsub(' \\(.*\\)','',series_name),
+           series_name = gsub(' \\[.*\\]','',series_name))
+
+ggplot(df,aes(x=pc1)) +
+  geom_histogram(fill='goldenrod',color='grey50',bins=30) +
+  xlab('PC1 loading') + ylab('Number of variables') +
+  geom_text_repel(aes(x=pc1,y=40,label=ifelse(pc1 > 0.0666,series_name,NA))) +
+  geom_text_repel(aes(x=pc1,y=1,label=ifelse(pc1 < -0.05,series_name,NA))) +
+  theme_classic() +
+  theme(axis.ticks = element_blank())
+```
+
+The variables to the right of the histogram have positive loading factors with PC1. In countries with higher PC1 values, most people (including poor people and women) are more likely to have a debit card in their own names. 
+
+On the left, we see variables with negative loadings. The countries with the lowest PC1 values are more likely to see cash transactions and people borrowing for health or medical purposes.
+
+```{r loadings2, warning=FALSE}
+ggplot(df,aes(x=pc2)) +
+  geom_histogram(fill='goldenrod',color='grey50',bins=30) +
+  xlab('PC2 loading') + ylab('Number of variables') +
+  geom_text_repel(aes(x=pc2,y=15+100*pc2,label=ifelse(pc2 > 0.0353 | pc2 < -0.0821,series_name,NA))) +
+  theme_classic() +
+  theme(axis.ticks = element_blank())
+```
+
+The distinguishing features of high-PC2 countries seem to be that most people (including the poor and uneducated) pay utility bills, while low-PC2 countries see a lot of domestic remittances.
+
+In addition to projecting down onto two dimensions, we can look for clusters (in the original high-dimensional feature space) to better see what type of structure exists in this dataset. We'll do this clustering using the k-means algorithm, and choose the appropriate number of clusters by looking for an inflection point in the in-cluster variance. Clustering will be based on the first 26 principal components, which together capture 90% of the variance in this dataset.
+
+```{r choosek}
+res <- data.frame()
+cluster_us <- pr$x %>% as.data.frame %>%
+  select(PC1:PC26) 
+for (i in 2:30) {
+  f <- NULL
+  for (j in 1:20) {
+    km_j <- kmeans(cluster_us,centers=i)
+    f <- c(f,km_j$betweenss/km_j$totss)
+  }
+  res <- rbind(res,data.frame(i=i,f=mean(f)))
+}
+qplot(res$i,res$f) + 
+  xlab('Number of clusters') +
+  ylab('Fraction of between-cluster variance') +
+  geom_vline(xintercept=5,color='red') +
+  theme_classic() 
+```
+
+To me, it looks like the "elbow"" is at around k=5. (This is more than a little subjuctive.) We'll stick with 5 clusters for the subsequent plots. Note that the k-means algorithm is not deterministic; we need to set a random seed for reproducible results.
+
+```{r clusters}
+set.seed(1234)
+km <- kmeans(cluster_us,centers=5) 
+cluster_us$clust <- as.factor(km$cluster)
+cluster_us$country_name <- gf_wide$country_name
+
+ggplot(cluster_us,aes(x=PC1,y=PC2,group=clust,color=clust)) +
+  geom_point(size=3) +
+  theme_classic()
+```
+
+As an example, we can look at which countries and regions are contained in cluster #3:
+
+```{r cluster3, warning=FALSE}
+ggplot(cluster_us,aes(x=PC1,y=PC2,group=clust,color=clust)) +
+  geom_point(size=3,aes(alpha=ifelse(clust==3,1,0.1))) +
+  geom_text_repel(aes(label=ifelse(clust==3,country_name,NA)),color='grey25') +
+  scale_alpha(guide = "none") +
+  theme_classic()
+```
+
+Another way to understand what these clusters represent is to find "typical" countries in each cluster by finding the elements located closest to its centroid.
+
+```{r centroids, warning=FALSE}
+country_centroid <- function(clust_num,num_res=1) {
+  mid <- km$centers[clust_num,]
+  tmp <- cluster_us[cluster_us$clust==clust_num,]
+  tmp$d2 <- sapply(1:nrow(tmp), function(i) sum((mid - tmp[i,1:26])^2))
+  tmp %>% arrange(d2) %>% head(num_res)
+}
+
+centroids <- plyr::llply(1:5,function(i) country_centroid(i,3)$country_name) %>%
+  unlist
+
+ggplot(cluster_us,aes(x=PC1,y=PC2,group=clust,color=clust)) +
+  geom_point(size=3,aes(alpha=ifelse(country_name %in% centroids,1,0.1))) +
+  geom_text_repel(aes(label=ifelse(country_name %in% centroids,
+                                   country_name,NA)),color='grey25') +
+  scale_alpha(guide = "none") +
+  theme_classic()
+```
+
+Several of the centroids are close to the average values for groups of countries such as "High income" or "Sub-Saharan Africa", suggesting that the clusters themselves might align roughly with those categories.
+
+If we want to understand differences between clusters, we can also ask which variables are most crucial in distinguishing them from each other.
+
+```{r gdiff,warning=FALSE}
+sep_vars <- function(gp1,gp2) {
+  # gp1 and gp2 are each data frames
+  tmp <- rbind(gp1 %>% mutate(label=1),gp2 %>% mutate(label=0))
+  # remove variables with zero variance
+  keep_us <- apply(tmp,2,sd) > 0
+  tmp <- tmp[,keep_us]
+  plyr::ldply(names(tmp %>% select(-label)),function(x) {
+    tt <- t.test(tmp[tmp$label==1,x],tmp[tmp$label==0,x])
+    data.frame(series_code=x,m1=tt$estimate[1],m2=tt$estimate[2],pval=tt$p.value)
+  }) %>%
+    #filter(pval < 0.01/ncol(tmp)) %>%
+    arrange(pval) %>%
+    plyr::join(key,by='series_code')
+}
+
+group_diff <- function(gp1,gp2) {
+  plotme <- sep_vars(gp1,gp2) %>%
+  head(10) %>%
+  mutate(series_name = gsub(' \\(.*\\)','',series_name),
+         series_name = gsub(' \\[.*\\]','',series_name),
+         diff=m2-m1)
+
+  ggplot(plotme,aes(x=fct_reorder(series_name,pval,.desc=TRUE),y=diff)) +
+    geom_bar(stat='identity',aes(fill=factor(diff>0))) +
+    geom_text(aes(y=mean(diff)/2,label=series_name)) +
+    coord_flip() +
+    xlab('Percent difference between groups') +
+    theme_classic() +
+    theme(axis.ticks=element_blank(),axis.title.y = element_blank(), 
+          axis.text.y = element_blank(),
+          legend.position = "none")
+}
+group_diff(gf_imp[cluster_us$clust==1,],gf_imp[cluster_us$clust==5,])
+```
+
+So, for example, the variables that do the most to distinguish between clusters 1 and 5 are utility bills (favoring 1) and remittances (favoring 5).
