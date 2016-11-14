@@ -1,5 +1,8 @@
-# TODO: Test this and make sure it works
-
+###############################################################################
+# This script doesn't actually *make* rasters; it makes CSV files containing
+# lat/long coordinates and averaged values of key variables for each of those
+# locations. I used ArcMap to make rasters from these CSV files.
+###############################################################################
 
 library(foreign)
 
