@@ -1,3 +1,13 @@
+###############################################################################
+# Plot to illustrate the urban-rural gaps for several different indicators.
+###############################################################################
+
+library(dplyr)
+library(reshape2)
+library(forcats)
+library(ggplot2)
+source('read-findex.R')
+
 gap_plot <- function(cname) {
   gap <- gf_wide %>% 
     filter(country_name==cname) %>%
@@ -29,7 +39,6 @@ gap_plot <- function(cname) {
            plabel=value %>% round(digits=1),
            plabel=ifelse(is.na(plabel),NA,paste0(plabel,'%'))) 
   lcut=max(gap$m_value,na.rm=TRUE)/4
-  #paste('lcut=',lcut) %>% print  
   ggplot(gap,aes(x=fct_reorder(series_code,m_value),y=value,fill=group,label=series_name)) +
     geom_bar(stat='identity') +
     coord_flip() +
