@@ -1,5 +1,5 @@
 ---
-title: "Exploratory Global Findex Analysis"
+title: "Composite mobile money index"
 author: "Craig Jolley"
 date: "November 14, 2016"
 output: html_document
