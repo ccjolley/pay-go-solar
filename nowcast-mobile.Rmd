@@ -45,54 +45,6 @@ You'll notice that, while access in increasing dramatically, a lot of countries 
 
 We can update these estimates using data from GSMA. DHS and GSMA don't measure exactly the same things -- DHS is looking at household-level mobile ownership, while GSMA measures (among other things) the fraction of _individuals_ who are unique mobile subscribers. Because we expect these values to be related but not identical, we will try to relate them using a linear model.
 
-The first step will be to extract the data from GSMA's (overly-pretty) Excel spreadsheet exports.
-
-```{r}
-p2frac <- function(p) {
-  # convert a percentage string to a number
-  p %>% sub('%','',.) %>% as.numeric / 100
-}
-
-s2num <- function(s) {
-  # get those commas out of there
-  s %>% gsub(',','',.) %>% as.numeric
-}
-
-get_gsma <- function(fname,yrs) {
-  x <- read.csv(fname,skip=2,stringsAsFactors=FALSE)
-  qnames <- paste('Q4.',yrs,sep='')
-  market <- x[x$Metric=='Unique subscribers' &
-                x$Attribute=='Total','Market..Operator']
-  agu <- x[x$Metric=='Growth rate, unique subscribers, annual' &
-             x$Attribute=='Total',qnames] %>% t %>% p2frac
-  pu <- x[x$Metric=='Market penetration, unique subscribers' &
-            x$Attribute=='Total',qnames] %>% t %>% p2frac
-  agn <- x[x$Metric=='Growth rate, excluding cellular M2M, annual' &
-             x$Attribute=='Total' & x$Market..Operator==market,qnames] %>% t %>% p2frac
-  p <- x[x$Metric=='Market penetration' & x$Attribute=='Total' & 
-           x$Market..Operator==market,qnames] %>% t %>% p2frac
-  h <- x[x$Metric=='Herfindahl-Hirschman Index',qnames] %>% t %>% s2num
-  res <- cbind(agu,pu,agn,p,h) %>% as.data.frame
-  res$CountryName <- market
-  res$SurveyYear <- yrs
-  names(res) <- c('ann_growth_uniq','penetration_uniq',
-                  'ann_growth','penetration','herfindahl',
-                  'CountryName','SurveyYear')
-  res
-}
-dirroot <- 'C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/GSMA/'
-
-gsma <- data.frame()
-for (n in afr_mobile$CountryName %>% unique) {
-  #print(n)
-  fname <- paste0(dirroot,n,'.csv')
-  yrs <- afr_mobile[afr_mobile$CountryName==n,'SurveyYear']
-  gsma <- rbind(gsma,get_gsma(fname,yrs))
-}
-gsma[gsma$CountryName=="Congo, Democratic Republic", 'CountryName'] <- "Congo Democratic Republic"
-gsma[gsma$CountryName=="C?te d'Ivoire", 'CountryName'] <- "Cote d'Ivoire"
-```
-
 Before we go trying to predict the future (or the present), how good are GSMA data at predicting the household ownership rates measured by DHS? We'll look at a few variables:
 
 * Survey year
@@ -105,6 +57,7 @@ Before we go trying to predict the future (or the present), how good are GSMA da
 Initially, at least, let's ignore country-specific information
 
 ```{r}
+source('read-GSMA.R')
 j <- plyr::join(afr_mobile,gsma,by=c('CountryName','SurveyYear')) %>% unique
 j2 <- j %>% select(-CountryName)
 lm(Value ~ .,j2) %>% summary 
