@@ -1,15 +1,9 @@
 library(llamar)
 library(ggplot2)
+source('read-DHS.R')
 
 ###############################################################################
-# TODO: I want this file to just contain the code I need to update the data
-# frames returned by read-DHS.R to contain estimates of the current 
-# electrification status of DHS households. The exploratory stuff that I use
-# to justify my models belongs in a separate file (probably an Rmd).
-###############################################################################
-
-###############################################################################
-# Plot historical household electrification rates from DHS API
+# Get historical household electrification rates from DHS API
 ###############################################################################
 
 dhs_elect <- loadDHS(indicators='HC_ELEC_H_ELC',
@@ -17,21 +11,8 @@ dhs_elect <- loadDHS(indicators='HC_ELEC_H_ELC',
   mutate(elect=Value) %>%
   dplyr::select(CountryName,SurveyYear,elect) 
 
-dhs_elect %>% 
-  filter(CountryName %in% c('Nigeria','Uganda','Tanzania','Rwanda','Zambia')) %>%
-  mutate(elect=elect/100) %>%
-  ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
-    geom_point(size=4) +
-    geom_line(size=2) +
-    xlab('Year') +
-    ylab('Electricity access') + 
-    theme_classic() +
-    scale_y_continuous(labels = scales::percent) +
-    theme(axis.ticks=element_blank(),
-          legend.title=element_blank())
-
 ###############################################################################
-# Try a linear model to get at electricity access in 2016
+# Linear model for 2016 access rates
 ###############################################################################
 
 elect_pred <- function(country,year=2016) {
@@ -39,20 +20,12 @@ elect_pred <- function(country,year=2016) {
     lm(elect ~ SurveyYear,data=.) %>%
     predict(data.frame(SurveyYear=year))
 }
-  
+
 newpts <- data.frame(CountryName=unique(dhs_elect$CountryName),
                      SurveyYear=2016)
 for (n in newpts$CountryName) {
   newpts[newpts$CountryName==n,'elect'] <- elect_pred(n)
 }
-
-rbind(dhs_elect,newpts) %>% # filter(CountryName=='Nigeria') %>%
-  ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
-  geom_point(size=4) +
-  geom_line(size=2) +
-  theme_classic()
-
-
 
 ###############################################################################
 # Use a combination of geography and wealth to predict electrification. If
@@ -96,20 +69,5 @@ tza_2010 <- elect_now(tza_2010,'Tanzania')
 uga_2011 <- elect_now(uga_2011,'Uganda')
 rwa_2015 <- elect_now(rwa_2015,'Rwanda')
 zmb_2014 <- elect_now(zmb_2014,'Zambia')
-
-###############################################################################
-# Plot for data 1-pager. Keep Ghana and Malawi in there to show extremes.
-###############################################################################
-
-dhs_elect %>%  
-  filter(CountryName %in% c('Nigeria','Ghana','Malawi')) %>%
-  ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
-  geom_point(size=4) +
-  geom_line(size=2) + 
-  ylab('Percent of households electrified') +
-  xlab('DHS survey year') +
-  theme_classic() +
-  theme(axis.ticks = element_blank(),
-        legend.title=element_blank())
 
 
