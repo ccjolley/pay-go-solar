@@ -34,21 +34,6 @@ dhs_elect %>%
 # Try a linear model to get at electricity access in 2016
 ###############################################################################
 
-# fit <- lm(elect ~ CountryName + SurveyYear,data=dhs_elect) 
-# # summary(fit)
-# # R^2 = 0.938 -- Good enough to predict
-# 
-# newpts <- data.frame(CountryName=unique(dhs_elect$CountryName),
-#                      SurveyYear=2016)
-# newpts <- newpts %>%
-#   mutate(elect=predict(fit,newpts))
-# 
-# rbind(dhs_elect,newpts) %>% 
-#   ggplot(aes(x=SurveyYear,y=elect,group=CountryName,color=CountryName)) +
-#     geom_point(size=4) +
-#     geom_line(size=2) + 
-#     theme_classic()
-
 elect_pred <- function(country,year=2016) {
   dhs_elect %>% filter(CountryName==country) %>%
     lm(elect ~ SurveyYear,data=.) %>%
@@ -66,77 +51,8 @@ rbind(dhs_elect,newpts) %>% # filter(CountryName=='Nigeria') %>%
   geom_point(size=4) +
   geom_line(size=2) +
   theme_classic()
-# # That looks somewhat better
 
-###############################################################################
-# Predicting access growth: is there a "sigmoidal" relationship with wealth
-# similar to what we saw with mobile adoption?
-###############################################################################
-# wealth_elect <- function(df,text) {
-#   df %>% removeAttributes %>%
-#     ggplot(aes(x=wealth,y=elect)) +
-#     geom_jitter(size=5,color='tomato',alpha=0.05,width=0) +
-#     geom_smooth(method = "glm", method.args = list(family = "binomial")) +
-#     ggtitle(text) +
-#     theme_classic() 
-# }
-# 
-# wealth_elect(rwa_2015,'Rwanda 2015')
-# # At least in Rwanda (with sort of middle-of-the-pack electrification rates),
-# # there does seem to be a relationship where the poorest households are 
-# # unelectrified.
-# wealth_elect(gha_2014,'Ghana 2014')
-# # Also some separation in more highly-electrified Ghana
 
-###############################################################################
-# Do I see an electric price point coming down the way we did for mobiles?
-###############################################################################
-# p50 <- function(df) {
-#   s <- df %>% removeAttributes %>% 
-#     glm(elect~wealth,data=.,family='binomial') %>%
-#     summary
-#   data.frame(res=-s$coefficients[1,1]/s$coefficients[2,1])
-# }
-# elect_compare <- function(a,title='') {
-#   # a is a big data frame coming out of rbind
-#   l <- a$label %>% unique
-#   if (length(l)==2) {
-#     p1 <- a[a$label==l[1],] %>% p50
-#     p2 <- a[a$label==l[2],] %>% p50
-#     print(paste('p50 difference = ',round(p2-p1,digits=3)))
-#   }
-#   ggplot(a,aes(x=wealth,y=elect,group=label,color=label)) +
-#     geom_smooth(method = "glm", method.args = list(family = "binomial")) +
-#     ggtitle(title) +
-#     theme_classic()
-# }
-# 
-# rbind(gha_2008,gha_2014) %>% removeAttributes %>%
-#   elect_compare(title='Ghana 2008-2014') # -0.38
-# 
-# rbind(ken_2009,ken_2014) %>% removeAttributes %>%
-#   elect_compare(title='Kenya 2008-2014') # -0.472
-# 
-# rbind(lbr_2007,lbr_2013) %>% removeAttributes %>%
-#   elect_compare(title='Liberia 2007-2013') # -0.38
-# 
-# rbind(nga_2008,nga_2013) %>% removeAttributes %>%
-#   elect_compare(title='Nigeria 2008-2013') # -0.242
-# 
-# rbind(rwa_2010,rwa_2015) %>% removeAttributes %>%
-#   elect_compare(title='Rwanda 2010-2015') # -0.781; bigger than mobile
-# 
-# rbind(sle_2008,sle_2013) %>% removeAttributes %>%
-#   elect_compare(title='Sierra Leone 2008-2013') # 0.027
-# 
-# # During this period, Rwanda showed pretty substantial growth, while Sierra Leone
-# # showed rather little.
-# 
-# rbind(uga_2006,uga_2011) %>% removeAttributes %>%
-#   elect_compare(title='Uganda 2006-2011') # -0.603
-# 
-# rbind(zmb_2007,zmb_2014) %>% removeAttributes %>%
-#   elect_compare(title='Zambia 2007-2014') # -0.544
 
 ###############################################################################
 # Use a combination of geography and wealth to predict electrification. If
