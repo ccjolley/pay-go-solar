@@ -1,0 +1,251 @@
+---
+title: "Nowcasting mobile ownership rates"
+author: "Craig Jolley"
+date: "November 14, 2016"
+output: html_document
+---
+
+This document explains our methodology for "nowcasting" mobile ownersip rates based on publicly-available historical data that is often several years old. 
+
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(llamar)
+library(printr)
+```
+
+First, let's take a look at mobile ownership rates for African countries:
+
+```{r}
+africa <- c('BJ','BF','BU','CM','CV','CF','TD','CG','CD','CI','EK','ER',
+            'ET','GA','GM','GH','GN','KE','LS','LB','MD','MW','ML','MZ','NM',
+            'NI','NG','RW','SN','SL','ZA','SD','SZ','TZ','TG','UG','ZM','ZW')
+pa <- c('Ethiopia','Ghana','Kenya','Liberia','Malawi','Nigeria','Rwanda',
+        'Senegal','Sierra Leone','Tanzania','Uganda','Zambia')
+
+afr_mobile <- loadDHS(indicators='HC_HEFF_H_MPH',
+                      countries=paste(africa,collapse=',')) %>%
+  dplyr::select(CountryName,SurveyYear,Value)
+
+afr_mobile %>% 
+  filter(CountryName %in% pa) %>%
+  mutate(mobile=Value/100) %>%
+  ggplot(aes(x=SurveyYear,y=mobile,group=CountryName,color=CountryName)) +
+    geom_point(size=4) +
+    geom_line(size=2) +
+    xlab('Year') +
+    ylab('Mobile ownership') + 
+    theme_classic() +
+    scale_y_continuous(labels = scales::percent) +
+    theme(axis.ticks=element_blank(),
+          legend.title=element_blank())
+```
+
+You'll notice that, while access in increasing dramatically, a lot of countries don't have particularly recent data. Ethiopia only has a single data point.
+
+We can update these estimates using data from GSMA. DHS and GSMA don't measure exactly the same things -- DHS is looking at household-level mobile ownership, while GSMA measures (among other things) the fraction of _individuals_ who are unique mobile subscribers. Because we expect these values to be related but not identical, we will try to relate them using a linear model.
+
+The first step will be to extract the data from GSMA's (overly-pretty) Excel spreadsheet exports.
+
+```{r}
+p2frac <- function(p) {
+  # convert a percentage string to a number
+  p %>% sub('%','',.) %>% as.numeric / 100
+}
+
+s2num <- function(s) {
+  # get those commas out of there
+  s %>% gsub(',','',.) %>% as.numeric
+}
+
+get_gsma <- function(fname,yrs) {
+  x <- read.csv(fname,skip=2,stringsAsFactors=FALSE)
+  qnames <- paste('Q4.',yrs,sep='')
+  market <- x[x$Metric=='Unique subscribers' &
+                x$Attribute=='Total','Market..Operator']
+  agu <- x[x$Metric=='Growth rate, unique subscribers, annual' &
+             x$Attribute=='Total',qnames] %>% t %>% p2frac
+  pu <- x[x$Metric=='Market penetration, unique subscribers' &
+            x$Attribute=='Total',qnames] %>% t %>% p2frac
+  agn <- x[x$Metric=='Growth rate, excluding cellular M2M, annual' &
+             x$Attribute=='Total' & x$Market..Operator==market,qnames] %>% t %>% p2frac
+  p <- x[x$Metric=='Market penetration' & x$Attribute=='Total' & 
+           x$Market..Operator==market,qnames] %>% t %>% p2frac
+  h <- x[x$Metric=='Herfindahl-Hirschman Index',qnames] %>% t %>% s2num
+  res <- cbind(agu,pu,agn,p,h) %>% as.data.frame
+  res$CountryName <- market
+  res$SurveyYear <- yrs
+  names(res) <- c('ann_growth_uniq','penetration_uniq',
+                  'ann_growth','penetration','herfindahl',
+                  'CountryName','SurveyYear')
+  res
+}
+dirroot <- 'C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/GSMA/'
+
+gsma <- data.frame()
+for (n in afr_mobile$CountryName %>% unique) {
+  #print(n)
+  fname <- paste0(dirroot,n,'.csv')
+  yrs <- afr_mobile[afr_mobile$CountryName==n,'SurveyYear']
+  gsma <- rbind(gsma,get_gsma(fname,yrs))
+}
+gsma[gsma$CountryName=="Congo, Democratic Republic", 'CountryName'] <- "Congo Democratic Republic"
+gsma[gsma$CountryName=="C?te d'Ivoire", 'CountryName'] <- "Cote d'Ivoire"
+```
+
+Before we go trying to predict the future (or the present), how good are GSMA data at predicting the household ownership rates measured by DHS? We'll look at a few variables:
+
+* Survey year
+* Annual growth rate in unique subscribers
+* Penetration of unique subscribers
+* Annual growth rate of mobile accounts
+* Penetration of mobile accounts
+* Herfindahl index
+
+Initially, at least, let's ignore country-specific information
+
+```{r}
+j <- plyr::join(afr_mobile,gsma,by=c('CountryName','SurveyYear')) %>% unique
+j2 <- j %>% select(-CountryName)
+lm(Value ~ .,j2) %>% summary 
+```
+
+With an adjusted R-squared of 0.8233, this does a pretty good job of predicting the DHS values. What if we now include the country as a factor variable, to account for country-specific differences in the relationship between DHS ownership rates and GSMA penetration rates?
+
+```{r}
+lm(Value ~ .,j) %>% summary  
+```
+
+Interestingly, the survey year is no longer significant in this model -- annual growth rates and penetration rates are sufficient to account for growth in each country. Note that the country-specific variables are just constant offsets -- the relationship between GSMA variables and DHS variables is otherwise assumed to be the same in each country.
+
+Now we can project 2016 ownership rates:
+
+```{r}
+gsma_2016 <- data.frame()
+for (x in pa) {
+  fname <- paste0(dirroot,x,'.csv')
+  gsma_2016 <- rbind(gsma_2016,get_gsma(fname,2016))
+}
+fit <- lm(Value ~ .,j)
+newvals <- predict(fit,gsma_2016)
+wpred <- gsma_2016 %>% 
+  dplyr::select(CountryName,SurveyYear) %>% 
+  mutate(Value=newvals,
+         Value=ifelse(Value>100,100,Value)) %>%
+  rbind(afr_mobile[afr_mobile$CountryName %in% pa,])
+ggplot(wpred,aes(x=SurveyYear,y=Value,group=CountryName,color=CountryName)) +
+  geom_point(size=4) +
+  geom_line(size=2) +
+  theme_classic()
+```
+
+Several countries have converged on 100% saturation in 2016. Note that Ethiopia only had one data point previously; the 2016 value is based entirely on its progress as indicated by GSMA. 
+
+Now that we have country-level estimates, we might inquire into which individual households were most likely to have acquired a cell phone between the last measured data point and the present. The DHS survey reports a composite index of household wealth -- is there a strong relationship between wealth and mobile ownership?
+
+```{r warning=FALSE}
+source('read-DHS.R')
+wealth_mobile <- function(df,text) {
+  df %>% removeAttributes %>%
+    ggplot(aes(x=wealth,y=mobile)) +
+    geom_jitter(size=5,color='tomato',alpha=0.05,width=0) +
+    geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+    ggtitle(text) +
+    theme_classic()
+}
+
+wealth_mobile(rwa_2015,'Rwanda 2015')
+```
+
+In Rwanda (with sort of middle-of-the-pack mobile ownership), there seems to be a sigmoidal relationship. Households with a low wealth index (the majority) are unlikely to own a mobile, while wealther households are more likely to have one.
+
+We can also compare countries whose DHS surveys were conducted at around the same time:
+
+```{r warning=FALSE}
+mobile_compare <- function(a,title='') {
+  # a is (typically) a big data frame coming out of rbind
+  l <- a$label %>% unique
+  ggplot(a,aes(x=wealth,y=mobile,group=label,color=label)) +
+    geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+    ggtitle(title) +
+    theme_classic()
+}
+
+rbind(gha_2014,ken_2014,lbr_2013,nga_2013,sle_2013) %>%
+  removeAttributes %>%
+  mobile_compare(title='DHS in 2013-14')
+```
+
+Liberia's adoption curve is furthest to the right -- this means that, all else being equal, a household would need to be wealthier to afford a mobile phone in Liberia than in the other four countries examined. Ghana and Kenya, with very high adoption rates, also appear to have the most affordable mobiles, in the sense that people with fewer overall assets are more likely to have one.
+
+If mobile ownership depends on wealth, then are they getting more affordable with time? In other words, is it likely that people with the same overall level of wealth are able to afford a mobile at later times than at earlier ones?
+
+```{r warning=FALSE}
+rbind(uga_2006,uga_2011) %>% removeAttributes %>%
+  mobile_compare(title='Uganda 2006-2011') 
+```
+
+Uganda shows a particularly large difference, with a major price drop in mobiles between 2006 and 2011.
+
+```{r warning=FALSE}
+rbind(rwa_2010,rwa_2015) %>% removeAttributes %>%
+  mobile_compare(title='Rwanda 2010-2015')
+```
+
+Although Rwanda showed a rapid increase in mobile adoption between 2010 and 2015, the affordability of mobile handsets doesn't seem to have changed much (relative to other assets). This suggests that the growth of mobiles in Rwanda may have had different driving factors in Rwanda than in Uganda during this period.
+
+Wealth isn't the only factor -- the usefulness of a mobile phone also depends on the presence of cell tower infrastructure, which is going to depend on geography. If signal strength is good enough that your neighbors have mobiles, it seems more likely that you will. DHS separates responses into geographic clusters, so we can test this hypothesis by determining whether a household is more likely to own mobile phones when their neighbors do.
+
+```{r warning=FALSE}
+geo_est <- function(df,text=NULL) {
+  mod<- df %>% group_by(clust) %>% 
+    summarise(clust_avg=mean(mobile,na.rm=TRUE),in_clust=n()) %>%
+    plyr::join(df,by='clust') %>%
+    mutate(out_avg = clust_avg*in_clust/(in_clust-1) - as.numeric(mobile)/(in_clust-1)) %>%
+    select(-clust_avg,-in_clust)
+  mod %>% removeAttributes %>%
+    ggplot(aes(x=out_avg,y=mobile)) +
+    geom_jitter(size=5,color='darkgoldenrod3',alpha=0.05,width=0) +
+    geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+    ggtitle(text) +
+    xlab('Fraction of neighbors with mobiles') +
+    ylab('Mobile ownership (0=no, 1=yes)') +
+    theme_classic()  
+}
+
+geo_est(rwa_2015,'Rwanda 2015') 
+
+```
+
+While the geographic trend isn't as strong as the wealth trend, people with mobiles are more likely to have neighbors with mobiles. Given that wealth is also geographically-correlated, we can combine these factors in a linear model.
+
+```{r}
+compare_models <- function(df) {
+  print("Wealth only")
+  df %>% removeAttributes %>% 
+    glm(data=.,mobile ~ wealth,family='binomial') %>% summary %>% print
+  mod <- df %>% group_by(clust) %>% 
+    summarise(clust_avg=mean(mobile,na.rm=TRUE),in_clust=n()) %>%
+    plyr::join(df,by='clust') %>%
+    mutate(out_avg = clust_avg*in_clust/(in_clust-1) - as.numeric(mobile)/(in_clust-1)) %>%
+    select(-clust_avg,-in_clust)
+  print("Geography only")
+  mod %>% removeAttributes %>% 
+    glm(data=.,mobile ~ out_avg,family='binomial') %>% summary %>% print
+  print("Wealth and geography")
+  mod %>% removeAttributes %>% 
+    glm(data=.,mobile ~ wealth+out_avg,family='binomial') %>% summary %>% print
+}
+
+compare_models(rwa_2015)
+```
+
+As expected, wealth does a significantly better job of explaining electrification than geography (AIC=11705 vs. 15389); combining the two yields a slightly better result (AIC=11648). Although geography and wealth are correlated, both have highly significant coefficients when used together, suggesting that the best predictive approach will be to combine both.
+
+The predictions in ```nowcast-mobile.R``` therefore assume that:
+
+* The probability of mobile ownership can be predicted from wealth and geography
+* Over time, mobiles becomes accessible to people with lower wealth
+* Current (or future) mobile ownership rates at a national level can be estimated from historical trends and GSMA projections.
+
+Our approach, therefore, is to model the probability of acquiring a mobile phone for each household in the DHS dataset at the time of the survey. We then estimate the overall national ownership rate, and assume that households acquire mobiles in decreasing order of probability until the (properly-weighted) average is equal to the projected national ownership rate. This (combined with similar calculations for electrification) is what allows us to estimate the current fraction of households with access to mobile phones but not electricity (see ```latent_demand.R```).
