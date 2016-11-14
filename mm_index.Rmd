@@ -1,0 +1,121 @@
+---
+title: "Exploratory Global Findex Analysis"
+author: "Craig Jolley"
+date: "November 14, 2016"
+output: html_document
+---
+
+This document doesn't correspond to any of the plots in the report; instead it contains some code I've used to calculate a composite mobile money index. While simple indicators such as the rate of mobile account ownership are more easily interpretable, composite indicators have the advantage of combining several different variables to produce a more nuanced measure of mobile money uptake.
+
+```{r warning=FALSE, message=FALSE}
+library(dplyr)
+library(mice)
+library(ggplot2)
+library(printr)
+source('read-findex.R')
+source('utils.R')
+```
+
+First, we'll build a composite index based on mobile money-related indicators
+
+* WP15163_4.1	Mobile account (% age 15+) [w2]
+* WP11672.1	Mobile phone used to pay bills (% age 15+) [w1]
+* WP11674.1	Mobile phone used to receive money (% age 15+) [w1]
+* WP11673.1	Mobile phone used to send money (% age 15+) [w1]
+* WP15172_4.1	Used a mobile phone to pay for school fees (% age 15+) [w2]
+* WP14940_4.1	Used a mobile phone to pay utility bills (% age 15+) [w2]
+* WP15161_1.1	Used an account to make a transaction through a mobile phone (% age 15+) [w2]
+
+Becouse not all of these were measured for every country, we'll use multiple imputation (with the ```mice``` package) to fill in the missing values.
+
+```{r}
+mm <- gf_wide %>% dplyr::select(WP15163_4.1,WP11672.1,WP11674.1,WP11673.1,
+                                WP15172_4.1,WP14940_4.1,WP15161_1.1)
+
+impute_mm <- function(m) {
+  nc <- ncol(m)
+  mm_mice <- mice(m,m=1,print=FALSE)
+  mm1 <- mice::complete(mm_mice,1)
+  pr1 <- prcomp(mm1,center=TRUE,scale=TRUE)
+  #summary(pr1) %>% print 
+  m <- m %>% mutate(country_name=gf_wide$country_name,
+                    pc1=pr1$x[,1])
+  m[rowSums(is.na(m)) == nc,'pc1'] <- NA 
+  m
+}
+
+mm <- impute_mm(mm)
+```
+
+What are the worst places for mobile money?
+
+```{r}
+mm %>% arrange(pc1) %>% head(10) # worst places for mobile money
+```
+
+The best are:
+
+```{r}
+mm %>% arrange(desc(pc1)) %>% head(10) 
+```
+
+Note that some of these are rich countries (US, Finland, Canada), where most of the indicators are missing, with the exception of WP14940\_4.1 (Used a mobile phone to pay utility bills) and WP15161\_1.1 (Used an account to make a transaction through a mobile phone). The implicit assumption being made by multiple imputation is that, even if African-style mobile money isn't a thing in those countries, their comfort with mobile banking suggests that customers there would use it if given the chance.
+
+Using the ```impute_mm``` function, we can make a similar index specific to rural mobile money adoption, with the following variables:
+
+* WP15163_4.10	Mobile account, rural (% age 15+) [w2]
+* WP11672.10	Mobile phone used to pay bills, rural (% age 15+) [w1]
+* WP11674.10	Mobile phone used to receive money, rural (% age 15+) [w1]
+* WP11673.10	Mobile phone used to send money, rural (% age 15+) [w1]
+* WP15172_4.10	Used a mobile phone to pay for school fees, rural (% age 15+) [w2]
+* WP14940_4.10	Used a mobile phone to pay utility bills, rural (% age 15+) [w2]
+* WP15161_1.10	Used an account to make a transaction through a mobile phone, rural (% age 15+) [w2]
+
+```{r}
+mm_rural <- gf_wide %>% select(WP15163_4.10,WP11672.10,WP11674.10,WP11673.10,
+                               WP15172_4.10,WP14940_4.10,WP15161_1.10)
+mm_rural <- impute_mm(mm_rural)
+```
+
+The worst destinations for rural mobile money:
+
+```{r}
+mm_rural %>% arrange(pc1) %>% head(10) 
+```
+
+The best also look similar:
+
+```{r}
+mm_rural %>% arrange(desc(pc1)) %>% head(10) # also
+```
+
+If we don't care about urban-rural comparisons, we can add in a few more variables:
+
+* WP15175.1	Paid school fees: using a mobile phone (% paying school fees, age 15+) [w2]
+* WP14943.1	Paid utility bills: using a mobile phone (% paying utility bills, age 15+) [w2]
+* WP14938.1	Received domestic remittances: through a mobile phone (% recipients, age 15+) [w2]
+* WP15181.1	Received government transfers: through a mobile phone (% transfer recipients, age 15+) [w2]
+* WP15187.1	Received payments for agricultural products: through a mobile phone (% recipients, age 15+) [w2]
+* WP14949.1	Received wages: through a mobile phone (% wage recipients, age 15+) [w2]
+* WP15170.1	Sent domestic remittances: through a mobile phone (% senders, age 15+) [w2]
+
+```{r warning=FALSE}
+mm_all <- mm %>%
+  select(WP15163_4.1:WP15161_1.1) %>%
+  cbind(gf_wide %>% select(WP15175.1,WP14943.1,WP14938.1,WP15181.1,WP15187.1,
+                           WP14949.1,WP15170.1)) %>%
+  impute_mm %>%
+  mutate(all = pc1,
+         national = mm$'pc1',
+         rural = mm_rural$'pc1') %>%
+  select(-pc1)
+
+clist <- c('Ethiopia','Ghana','Kenya','Malawi','Nigeria','Rwanda','Senegal',
+           'Sierra Leone','Tanzania','Uganda','Zambia')
+mm_all %>% 
+  select(country=country_name,value=all) %>% 
+  filter(country %in% clist) %>%
+  highlight_bar(pcent=FALSE)
+```
+
+The Power Africa focus countries show a wide range of values on this composite index, reflecting their varying stages of digital finance inclusion.
