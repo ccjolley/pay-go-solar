@@ -1,6 +1,6 @@
-###############################################################################
-# TODO: I'm not entirely sure what this is or whether it works.
-###############################################################################
+library(dplyr)
+source('utils.R')
+source('nowcast-mobile.R') # also calls read-DHS.R
 
 ###############################################################################
 # What about broad geographic coverage?
@@ -22,39 +22,4 @@ mobile_coverage <- data.frame(country=c('Ethiopia','Ghana','Kenya','Liberia','Ma
 
 highlight_bar(mobile_coverage)
 
-wpred %>% filter(SurveyYear==2016) %>% 
-  select(country=CountryName,ownership=Value) %>%
-  plyr::join(mobile_coverage,by='country') %>%
-  rename(coverage=value) %>%
-  ggplot(aes(x=ownership,y=coverage,label=country)) +
-  geom_point() +
-  geom_smooth(method='lm',alpha=0.3) +
-  geom_text(vjust=1) +
-  theme_classic()
 
-lbr_2013 %>% filter(rural==1) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
-lbr_2013 %>% filter(rural==0) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
-
-uga_2011 %>% filter(rural==1) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
-uga_2011 %>% filter(rural==0) %>% summarize(m=mean(mobile_now,na.rm=TRUE))
-
-highlight_bar(mobile_coverage)
-
-###############################################################################
-# GSMA sample plots
-###############################################################################
-
-gsma_pa <- plyr::ldply(pa[pa != 'South Africa'],function(x) 
-  get_gsma(paste0(dirroot,x,'.csv'),2000:2016))
-
-gsma_pa %>% 
-  filter(CountryName %in% c('Nigeria','Uganda','Rwanda','Tanzania','Zambia')) %>%
-  ggplot(aes(x=SurveyYear,y=penetration_uniq,group=CountryName,
-             color=CountryName)) +
-  geom_line(size=2) +
-  theme_classic() +
-  xlab('Year') +
-  ylab('Penetration, unique subscribers') +
-  scale_y_continuous(labels = scales::percent) +
-  theme(axis.ticks=element_blank(),
-        legend.title=element_blank())
