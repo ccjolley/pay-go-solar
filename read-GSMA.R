@@ -33,12 +33,6 @@ get_gsma <- function(fname,yrs) {
 dirroot <- 'C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/GSMA/'
 
 gsma <- data.frame()
-africa <- c("Burkina Faso","Benin","Burundi","Congo Democratic Republic","Congo",
-            "Cote d'Ivoire","Cameroon","Ethiopia","Gabon","Ghana","Gambia",
-            "Guinea","Kenya","Liberia","Lesotho","Madagascar","Mali","Malawi",
-            "Mozambique","Nigeria","Niger","Namibia","Rwanda","Sierra Leone",
-            "Senegal","Swaziland","Chad","Togo","Tanzania","Uganda","Zambia",
-            "Zimbabwe")
 for (n in afr_mobile$CountryName %>% unique) {
   #print(n)
   fname <- paste0(dirroot,n,'.csv')
