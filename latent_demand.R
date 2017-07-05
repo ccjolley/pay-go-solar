@@ -21,7 +21,7 @@ f <- function(df) {
 }
 
 avgs <- rbind(f(eth_2011),f(gha_2014),f(ken_2014),f(lbr_2013),f(mwi_2010),
-              f(nga_2013),f(rwa_2015),f(sen_2014),f(sle_2013),f(tza_2010),
+              f(nga_2013),f(rwa_2015),f(sen_2014),f(sle_2013),f(tza_2016),
               f(uga_2011),f(zmb_2014))
 
 ###############################################################################
@@ -32,7 +32,7 @@ m <- avgs %>%
   mutate(Mobile = mobile_only + both,
          blank = mobile_only,
          Electricity = both + elect_only) %>%
-  select(country,Mobile,blank,Electricity) %>%
+  dplyr::select(country,Mobile,blank,Electricity) %>%
   melt('country') %>%
   mutate(pos = ifelse(variable == 'Mobile',1,2),
          country = factor(country,levels=avgs$country))
