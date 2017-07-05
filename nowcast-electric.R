@@ -39,7 +39,7 @@ elect_now <- function(df,cname) {
     summarise(clust_avg=mean(elect,na.rm=TRUE),in_clust=n()) %>%
     plyr::join(df,by='clust') %>%
     mutate(out_avg = clust_avg*in_clust/(in_clust-1) - as.numeric(elect)/(in_clust-1)) %>%
-    select(-clust_avg,-in_clust)
+    dplyr::select(-clust_avg,-in_clust)
   # combine this score with wealth to prioritize likely electrification
   fit <- mod %>% removeAttributes %>%
     glm(elect~out_avg,data=.,family='binomial')
@@ -65,7 +65,7 @@ mwi_2010 <- elect_now(mwi_2010,'Malawi')
 nga_2013 <- elect_now(nga_2013,'Nigeria')
 sen_2014 <- elect_now(sen_2014,'Senegal')
 sle_2013 <- elect_now(sle_2013,'Sierra Leone')
-tza_2010 <- elect_now(tza_2010,'Tanzania')
+tza_2016 <- elect_now(tza_2016,'Tanzania')
 uga_2011 <- elect_now(uga_2011,'Uganda')
 rwa_2015 <- elect_now(rwa_2015,'Rwanda')
 zmb_2014 <- elect_now(zmb_2014,'Zambia')

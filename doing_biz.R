@@ -3,6 +3,43 @@ library(XLConnect)
 library(forcats)
 library(dplyr)
 
+db <- readWorksheetFromFile('../../DB17-only.xlsx',1)
+
+regions17 <- db %>%
+  filter(dbyear==2017) %>%
+  group_by(region) %>%
+  summarize(dtf=mean(DTFdb1617_global))
+
+plotme <- db %>%
+  filter(dbyear==2017,
+         economy %in% c('Nigeria','Rwanda','Uganda','Tanzania','Zambia')) %>%
+  select(name=economy,dtf=DTFdb1617_global) %>%
+  mutate(fill=1) %>%
+  arrange(desc(dtf)) %>%
+  rbind(
+    regions17 %>%
+      filter(region %in% c('Sub-Saharan Africa','High income: OECD')) %>%
+      select(name=region,dtf) %>%
+      mutate(fill=2) %>%
+      arrange(dtf)
+  ) %>%
+  mutate(label=as.character(round(dtf,1)),
+         fill=as.factor(fill))
+
+ggplot(plotme,aes(x=fct_rev(fct_inorder(name)),y=dtf))  +
+  geom_bar(stat='identity',aes(fill=fill)) +
+  geom_text(aes(label=label,y=dtf-3),hjust=1) +
+  geom_text(aes(label=name,y=3),hjust=0) +
+  coord_flip() +
+  ggtitle('WB Doing business score (0-100)') +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(),
+        legend.position = "none")
+
+############## old ##################
+
 db <- readWorksheetFromFile("C:/Users/Craig/Desktop/Live projects/Pay-go solar/credit.xlsx",1)
 db$fill <- as.factor(c(1,1,1,1,1,2,2))
 
