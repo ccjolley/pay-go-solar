@@ -64,7 +64,7 @@ kr <- knn.reg(uga[,c('lat','long')],y=uga$elect,
 uga$pred <- kr$pred
 qplot(uga$elect,uga$pred)
 (uga$elect - uga$pred)^2 %>% mean %>% sqrt 
-# RMSE = 0.1768631 - comparable to SVM
+# RMSE = 0.1768631 
 
 knn_wrap <- function(df,pts) {
   my_knn <- knn.reg(train=df[,c('lat','long')],test=pts[,c('y','x')],
@@ -117,9 +117,20 @@ print(tuneResult3) # epsilon=0.32, cost=1200, RSME=0.18552
 # can't seem to beat KNN
 plot(tuneResult3)
 
+cost_test <- function(c) {
+  test_svm <- svm(elect ~ .,uga,epsilon=0.32,cost=c)
+  (uga$elect - predict(test_svm,uga))^2 %>% mean %>% sqrt 
+}
+cost_test(1500) # 0.1725149
+cost_test(3000) # 0.1707916
+cost_test(10000) # 0.1675187
+cost_test(50000) # 0.1642089 
+# I'm a litttle concerned that very high costs might lead to overfitting
+
+
 # Now let's see what the raster looks like
 svm_wrap <- function(df,pts) {
-  my_svm <- svm(elect~.,df,epsilon=0.32,cost=1200)
+  my_svm <- svm(elect~.,df,epsilon=0.32,cost=1500)
   pts_rename <- pts %>% as.data.frame %>%
     dplyr::rename(long=x,lat=y)
   predict(my_svm,pts_rename)
@@ -129,6 +140,15 @@ svm_raster <- make_elect_shp(uga,svm_wrap,'uga_svm')
 plot(svm_raster)
 # It looks like SVM gives smoother countours than KNN, but is more inclined
 # to crazy extrapolations in areas with no data.
+
+# In the ROI, results for C=50000 look about the same as C=1200. Boundary
+# effects are even crazier, though.
+
+# Filter out values that are <0 or >1
+svm_vals <- (svm_raster %>% rasterToPoints)[,3]
+svm_filter <- ifelse(svm_vals>1,1,ifelse(svm_vals<0,0,svm_vals))
+svm_filter_raster <- setValues(svm_raster,svm_filter)
+plot(svm_filter_raster)
 
 ###############################################################################
 # What about random forests?
@@ -216,6 +236,7 @@ xgb_wrap <- function(df,pts) {
                     verbose=0)
   pts_rename <- pts %>% as.data.frame %>%
     dplyr::rename(long=x,lat=y) %>%
+    dplyr::select(lat,long) %>%
     as.matrix
   res <- predict(my_xgb,pts_rename)
   paste0('max = ',max(res)) %>% print
@@ -224,5 +245,5 @@ xgb_wrap <- function(df,pts) {
 }
 
 xgb_raster <- make_elect_shp(uga,xgb_wrap,'uga_xgb')
-# TODO: Not sure why this isn't working -- come back to it.
 plot(xgb_raster)
+# This looks horrible. This algorithm is definitely overkill.
