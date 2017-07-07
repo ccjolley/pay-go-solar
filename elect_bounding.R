@@ -151,3 +151,78 @@ rf_wrap <- function(df,pts) {
 
 rf_raster <- make_elect_shp(uga,rf_wrap,'uga_rf')
 plot(rf_raster)
+
+###############################################################################
+# The big guns: XGBoost
+###############################################################################
+library(xgboost)
+x <- uga[,c('lat','long')] %>% as.matrix
+train_xgb <- xgboost(data=x,
+                     label=uga$elect,
+                     objective='reg:linear',
+                     nrounds=500,
+                     verbose=0)
+(uga$elect - predict(train_xgb,x))^2 %>% mean %>% sqrt # RSME=0.00238 overfit.
+# Actually, it overfits so much that none of the on-grid points being evaluated
+# for the raster are >0.5 -- it's useless for interpolation because it just
+# memorized the data.
+
+# Cross-validation to the rescue
+xgb_rmse <- function(df,in_test,nrounds,eta,max_depth,subsample,cbt) {
+  df_test <- df[in_test,]
+  df_train <- df[!in_test,]
+  x <- df_train[,c('lat','long')] %>% as.matrix
+  x_test <- df_test[,c('lat','long')] %>% as.matrix
+  df_xgb <- xgboost(data=x,
+                    label=df_train$elect,
+                    objective='reg:linear',
+                    nrounds=nrounds,
+                    verbose=0,
+                    eta=eta,max_depth=max_depth,subsample=subsample,
+                    colsample_bytree=cbt)
+  (df_test$elect - predict(df_xgb,x_test))^2 %>% mean %>% sqrt
+}
+
+xgb_xval <- function(df,verbose=FALSE,fold=10,nrounds=385, eta=0.05, max_depth=5, 
+                     subsample=0.7,cbt=0.7) {
+  xval_ind <- rep(1:fold,times=nrow(df)/fold+1)[1:nrow(df)] %>% sample
+  res <- rep(NA,fold)
+  for (i in 1:fold) {
+    rmsle <- xgb_rmse(df,xval_ind==i,nrounds,eta,max_depth,subsample,cbt)
+    if (verbose) {
+      paste0('x-val ',i,': RMSLE = ',rmsle) %>% print
+    }
+    res[i] <- rmsle
+  }
+  mean(res)
+}
+
+xgb_xval(uga,FALSE,10,385,0.05,5,0.7,0.7) # 0.1944931
+xgb_xval(uga,FALSE,10,200,0.05,5,0.7,0.7) # 0.1884459
+xgb_xval(uga,FALSE,10,100,0.05,5,0.7,0.7) # 0.1842703
+# Can't seem to improve on this much with small tweaks
+
+
+
+# Now let's make a raster
+xgb_wrap <- function(df,pts) {
+  x <- df[,c('lat','long')] %>% as.matrix
+  my_xgb <- xgboost(data=x,
+                    label=df$elect,
+                    objective='reg:linear',
+                    nrounds=100,
+                    eta=0.05,max_depth=5,
+                    subsample=0.7,colsample_bytree=0.7,
+                    verbose=0)
+  pts_rename <- pts %>% as.data.frame %>%
+    dplyr::rename(long=x,lat=y) %>%
+    as.matrix
+  res <- predict(my_xgb,pts_rename)
+  paste0('max = ',max(res)) %>% print
+  paste0('min = ',min(res)) %>% print
+  res
+}
+
+xgb_raster <- make_elect_shp(uga,xgb_wrap,'uga_xgb')
+# TODO: Not sure why this isn't working -- come back to it.
+plot(xgb_raster)
