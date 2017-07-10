@@ -9,16 +9,34 @@ library(ggplot2)
 library(raster)
 library(rgeos)
 library(rgdal)
+library(maptools)
 
 uga_data <- read.csv('uga_dhs_2011.csv') %>%
   filter(lat != 0)
 
 uga <- uga_data %>% dplyr::select(lat,long,elect)
 
-# First, visualize as colored dots
-ggplot(uga_data,aes(x=long,y=lat,color=elect)) +
-  geom_point(size=4) +
+shp2df <- function(dsn,layer) {
+  shp <- readOGR(dsn=dsn,layer=layer)
+  shp@data$id <- rownames(shp@data)
+  shp.points = fortify(shp, region="id")
+  plyr::join(shp.points, shp@data, by="id")
+}
+
+uga_border <- shp2df(dsn="./uga_borders", layer="uga_borders")
+uga_lakes <- shp2df(dsn="./uga_lakes", layer="uga_lakes") %>%
+  filter(name=='Lake Victoria')
+
+ggplot(uga_border) + 
+  aes(long,lat) + 
+  geom_path(color="black") +
+  coord_equal() +
+  #geom_polygon(data=uga_lakes,fill='cornflowerblue') +
+  geom_point(data=uga_data,size=4,aes(color=elect)) +
   theme_classic()
+
+# TODO: lake display doesn't look great
+# clues here? https://github.com/tidyverse/ggplot2/wiki/plotting-polygon-shapefiles
 
 ###############################################################################
 # make_elect_shp()
@@ -72,8 +90,39 @@ knn_wrap <- function(df,pts) {
   my_knn$pred
 }
 
-knn_raster <- make_elect_shp(uga,knn_wrap,'test')
+knn_raster <- make_elect_shp(uga,knn_wrap,'uga_knn')
 plot(knn_raster)
+
+# try with ggplot
+
+library(rasterVis)
+library(RColorBrewer)
+
+uga_border_shp <- readOGR(dsn="./uga_borders", layer="uga_borders")
+uga_lakes_shp <- readOGR(dsn="./uga_lakes", layer="uga_lakes")
+colr <- colorRampPalette(brewer.pal(11, 'Greens'))
+
+uga_raster_plot <- function(r) {
+  rasterVis::levelplot(r,
+                       margin=FALSE,
+                       colorkey=list(
+                         space='bottom',                   # plot legend at bottom
+                         labels=list(at=(0:10)/10, font=4)      # legend ticks and labels 
+                       ),
+                       par.settings=list(
+                         axis.line=list(col='transparent') # suppress axes and legend outline
+                       ),
+                       scales=list(draw=FALSE),
+                       xlab='',
+                       ylab='',
+                       col.regions=colr,                   # colour ramp
+                       at=seq(0, 1, len=101)) +            # colour ramp breaks
+    latticeExtra::layer(sp.polygons(uga_border_shp, lwd=1)) +
+    latticeExtra::layer(sp.polygons(uga_lakes_shp, lwd=1))
+}
+
+uga_raster_plot(knn_raster)
+
 
 ###############################################################################
 # Just for lulz, try lm. Terrible prediction
