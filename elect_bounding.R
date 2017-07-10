@@ -10,6 +10,8 @@ library(raster)
 library(rgeos)
 library(rgdal)
 library(maptools)
+library(llamar)
+library(RColorBrewer)
 
 uga_data <- read.csv('uga_dhs_2011.csv') %>%
   filter(lat != 0)
@@ -25,25 +27,32 @@ shp2df <- function(dsn,layer) {
 
 uga_border <- shp2df(dsn="./uga_borders", layer="uga_borders")
 uga_lakes <- shp2df(dsn="./uga_lakes", layer="uga_lakes") %>%
-  filter(name=='Lake Victoria')
+  mutate(island=factor(ifelse(piece==1,0,1)),
+         gp=paste0(name,'_',piece))
+
+colr <- colorRampPalette(brewer.pal(9, 'Greens'))
 
 ggplot(uga_border) + 
   aes(long,lat) + 
+  geom_polygon(fill='gray85') +
   geom_path(color="black") +
   coord_equal() +
-  #geom_polygon(data=uga_lakes,fill='cornflowerblue') +
+  geom_polygon(data=uga_lakes,aes(group=gp,fill=island)) +
+  scale_fill_manual(values=c('cornflowerblue','gray85'),guide=FALSE) +
   geom_point(data=uga_data,size=4,aes(color=elect)) +
-  theme_classic()
-
-# TODO: lake display doesn't look great
-# clues here? https://github.com/tidyverse/ggplot2/wiki/plotting-polygon-shapefiles
+  scale_color_gradient(name='Electrification',low=colr(2)[1],high=colr(2)[2]) +
+  theme(title = element_blank(), axis.title = element_blank(), 
+        axis.text = element_blank(), axis.ticks = element_blank(), 
+        axis.ticks.length = unit(0, units = "points"), panel.border = element_blank(), 
+        panel.grid = element_blank(), panel.background = element_blank(), 
+        plot.background = element_blank()) 
 
 ###############################################################################
 # make_elect_shp()
 #   Assumes that df will have columns named 'lat','long', and 'elect'
 #   wrapper should be a function that will return an array of predictions
 ###############################################################################
-make_elect_shp <- function(df,wrapper,out_name,thresh=0.5) {
+make_elect_shp <- function(df,wrapper,out_name=NULL,thresh=0.5) {
   # Raster setup
   xpad <- (max(df$long) - min(df$long))*0.05
   ypad <- (max(df$lat) - min(df$lat))*0.05
@@ -55,9 +64,11 @@ make_elect_shp <- function(df,wrapper,out_name,thresh=0.5) {
   # Call wrapper function
   pred <- wrapper(df,r1pts)
   r1 <- setValues(r1,pred)
-  r2 <- setValues(r1,pred > 0.5)
-  pg1 <- rasterToPolygons(r2,function(x) {x ==1},dissolve=TRUE)
-  writeOGR(obj=pg1, dsn=out_name, layer=out_name, driver="ESRI Shapefile")
+  if (!is.null(out_name)) {
+    r2 <- setValues(r1,pred > 0.5)
+    pg1 <- rasterToPolygons(r2,function(x) {x ==1},dissolve=TRUE)
+    writeOGR(obj=pg1, dsn=out_name, layer=out_name, driver="ESRI Shapefile")
+  }
   r1
 }
 
@@ -96,11 +107,9 @@ plot(knn_raster)
 # try with ggplot
 
 library(rasterVis)
-library(RColorBrewer)
 
 uga_border_shp <- readOGR(dsn="./uga_borders", layer="uga_borders")
 uga_lakes_shp <- readOGR(dsn="./uga_lakes", layer="uga_lakes")
-colr <- colorRampPalette(brewer.pal(11, 'Greens'))
 
 uga_raster_plot <- function(r) {
   rasterVis::levelplot(r,
@@ -134,8 +143,9 @@ lm_wrap <- function(df,pts) {
   predict(my_lm,pts_rename)
 }
 
-lm_raster <- make_elect_shp(uga,lm_wrap,'uga_lm')
-plot(lm_raster)
+#lm_raster <- make_elect_shp(uga,lm_wrap,'uga_lm')
+lm_raster <- make_elect_shp(uga,lm_wrap)
+uga_raster_plot(lm_raster)
 
 ###############################################################################
 # Curious about SVM now. I'm not going to worry about cross-validation at
@@ -185,7 +195,8 @@ svm_wrap <- function(df,pts) {
   predict(my_svm,pts_rename)
 }
 
-svm_raster <- make_elect_shp(uga,svm_wrap,'uga_svm')
+# svm_raster <- make_elect_shp(uga,svm_wrap,'uga_svm')
+svm_raster <- make_elect_shp(uga,svm_wrap)
 plot(svm_raster)
 # It looks like SVM gives smoother countours than KNN, but is more inclined
 # to crazy extrapolations in areas with no data.
@@ -197,7 +208,7 @@ plot(svm_raster)
 svm_vals <- (svm_raster %>% rasterToPoints)[,3]
 svm_filter <- ifelse(svm_vals>1,1,ifelse(svm_vals<0,0,svm_vals))
 svm_filter_raster <- setValues(svm_raster,svm_filter)
-plot(svm_filter_raster)
+uga_raster_plot(svm_filter_raster)
 
 ###############################################################################
 # What about random forests?
@@ -218,8 +229,9 @@ rf_wrap <- function(df,pts) {
   my_rf$test$predicted
 }
 
-rf_raster <- make_elect_shp(uga,rf_wrap,'uga_rf')
-plot(rf_raster)
+#rf_raster <- make_elect_shp(uga,rf_wrap,'uga_rf')
+rf_raster <- make_elect_shp(uga,rf_wrap)
+uga_raster_plot(rf_raster)
 
 ###############################################################################
 # The big guns: XGBoost
