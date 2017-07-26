@@ -25,7 +25,7 @@ load_geo <- function(dname,fname,joinme) {
 nga_2013_geo <- load_geo('Nigeria DHS 2013','NGGE6AFL.dbf',nga_2013)
 uga_2011_geo <- load_geo('Uganda DHS 2011','UGGE61FL.dbf',uga_2011)
 zmb_2014_geo <- load_geo('Zambia DHS 2013-4','ZMGE61FL.dbf',zmb_2014)
-tza_2010_geo <- load_geo('Tanzania DHS 2010','TZGE61FL.dbf',tza_2010)
+tza_2016_geo <- load_geo('Tanzania DHS 2016','TZGE61FL.dbf',tza_2010)
 rwa_2015_geo <- load_geo('Rwanda DHS 2015','RWGE71FL.dbf',rwa_2015)
 
 setwd(oldwd)
