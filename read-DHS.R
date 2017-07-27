@@ -67,3 +67,17 @@ zmb_2014 <- load_dhs('Zambia DHS 2013-4','Zambia')
 # sle_2008 <- load_dhs('Sierra Leone DHS 2008','Sierra Leone')
 # uga_2006 <- load_dhs('Uganda DHS 2006','Uganda')
 # zmb_2007 <- load_dhs('Zambia DHS 2007','Zambia')
+
+# Make new average CSV for Tanzania 2016
+tza_2016 %>% 
+  mutate(clust=as.numeric(clust)) %>%
+  group_by(clust) %>%
+  summarize(mobile=mean(mobile),
+            elect=mean(elect),
+            bank=mean(bank),
+            wealth=mean(wealth),
+            adm0=first(adm0),
+            adm1=first(adm1),
+            weight=mean(weight),
+            rural=mean(rural)) %>%
+  write.csv('tza_dhs_2016.csv',row.names=FALSE)

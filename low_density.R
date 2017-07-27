@@ -6,29 +6,17 @@
 # round (to do this iteratively)
 
 library(raster)
+library(rgeos)
 library(rgdal)
+library(maptools)
 library(dplyr)
+library(ggplot2)
+library(FNN)
 
-# define ROI
-tzn_data <- read.csv('tzn_dhs_2016.csv') %>% filter(lat != 0)
-xmin <- min(tzn_data$long)
-xmax <- max(tzn_data$long)
-xbuf <- 0.05*(xmax-xmin)
-ymin <- min(tzn_data$lat)
-ymax <- max(tzn_data$lat)
-ybuf <- 0.05*(ymax-ymin)
-# load LandScan raster and clip
-f <- "C:/Users/Craig/Desktop/Live projects/bivar-raster/landscan-pop/w001001x.adf"
-ls <- raster(f) %>%
-  crop(extent(xmin-xbuf,xmax+xbuf,ymin-ybuf,ymax+ybuf))
-
-tzn_data$pop_dens <- extract(ls,tzn_data[,c('long','lat')] %>% as.matrix)
-
-quantile(tzn_data$pop_dens,na.rm=TRUE,probs=c(0,0.05,0.95,1))
-sort(tzn_data$pop_dens) %>% head(50)
-# Quite a few points actually have pop density zero. 
-
-### Given a lat/long pair, find the distance to the closest point in a df
+###############################################################################
+# Utility function: Given a lat/long pair, find the distance to the closest 
+# point in a dataframe
+###############################################################################
 closest_dist <- function(lat_,long_,df,omit.zero=TRUE) {
   df_i <- df %>%
     mutate(d2=(lat-lat_)^2 + (long-long_)^2)
@@ -38,8 +26,34 @@ closest_dist <- function(lat_,long_,df,omit.zero=TRUE) {
   min(df_i$d2) %>% sqrt
 }
 
-# TODO: not sure if this is really the optimal way to nest the if/thens
-# need to actually benchmark
+###############################################################################
+# Utility function: Given a spatial data frame, return an ordinary data frame
+# with lat/long points
+###############################################################################
+shp2df <- function(shp) {
+  shp@data$id <- rownames(shp@data)
+  shp.points = fortify(shp, region="id")
+  plyr::join(shp.points, shp@data, by="id")
+}
+
+###############################################################################
+# Prepare landscan raster
+###############################################################################
+get_ls <- function(pts_df) {
+  xmin <- min(pts_df$long)
+  xmax <- max(pts_df$long)
+  xbuf <- 0.05*(xmax-xmin)
+  ymin <- min(pts_df$lat)
+  ymax <- max(pts_df$lat)
+  ybuf <- 0.05*(ymax-ymin)
+  f <- "C:/Users/Craig/Desktop/Live projects/bivar-raster/landscan-pop/w001001x.adf"
+  raster(f) %>% crop(extent(xmin-xbuf,xmax+xbuf,ymin-ybuf,ymax+ybuf))
+}
+
+###############################################################################
+# Get the points with zero population density that are located within the 
+# country boundaries and are not too close to a DHS sample location.
+###############################################################################
 get_zero_pts <- function(r,shp,npts,pt_df,cutoff=1,dist_cutoff=0.5,seed=12345) {
   set.seed(seed)
   res <- data.frame()
@@ -62,167 +76,127 @@ get_zero_pts <- function(r,shp,npts,pt_df,cutoff=1,dist_cutoff=0.5,seed=12345) {
   res
 }
 
-tzn_shp <- readOGR(dsn="./tzn_borders", layer="tzn_borders")
-
-sapply(1:nrow(zp),function(i) 
-  closest_dist(zp[i,'lat'],zp[i,'long'],tzn_data))
-
-zp <- get_zero_pts(ls,tzn_shp,200,tzn_data,cutoff=2)
-zp$zero <- TRUE
-tzn_data %>%
-  dplyr::select(lat,long) %>% 
-  mutate(zero=FALSE) %>%
-  rbind(zp) %>%
-  ggplot(aes(x=long,y=lat,color=zero)) +
-    geom_point(size=4)
-
-# TODO: Almost there! I just need a way to filter points and make sure 
-# they're not too close to sampled DHS points. And possibly relax the cutoff
-# a little.
-
-
-
-### old stuff below here
-
-library(curl)
-library(jsonlite)
-library(httr)
-library(dplyr)
-library(ggplot2)
-library(optimx)
-
 ###############################################################################
-# Get population density based on lat/long
-# Impossibly slow. Possible to do this with landscan instead?
+# Kriged surfaces in ArcMap often don't extend all the way to the country's 
+# borders, because EBK can't extrapolate beyond the sampled region. Find the
+# four points that make a bounding box around the entire country, and estimate
+# the target variable at those points using KNN.
 ###############################################################################
-options(stringsAsFactors = FALSE)
-get_pop_dens <- function(lat,long) {
-  url  <- "http://www.datasciencetoolkit.org"
-  path <- paste0('coordinates2statistics/',lat,'%2c',long,
-                 '?statistics=population_density')
-  raw.result <- GET(url = url, path = path)
-  if (raw.result$status_code != 200) {
-    return(NULL)
-  }
-  res <- raw.result$content %>% rawToChar %>% fromJSON
-  res$statistics$population_density$value
+get_bounding_pts <- function(shp,pt_df,varname,buf_scale=0.025) {
+
+  extrema <- shp_df[c(which.max(shp_df$lat),
+                          which.max(shp_df$long),
+                          which.min(shp_df$lat),
+                          which.min(shp_df$long)),c('lat','long')] %>%
+    mutate(lat_=ifelse(lat==min(lat),
+                       min(lat)-buf_scale*(max(lat)-min(lat)),lat),
+           lat_=ifelse(lat==max(lat),
+                       max(lat)+buf_scale*(max(lat)-min(lat)),lat),
+           long_=ifelse(lat==min(long),
+                        min(long)-buf_scale*(max(long)-min(long)),long),
+           long_=ifelse(lat==max(long),
+                        max(long)+buf_scale*(max(long)-min(long)),long)) %>%
+    select(lat_,long_) %>%
+    rename(lat=lat_,long=long_)
+  # Select optimal value of k for KNN model
+  vars <- c('lat','long')
+  k_rmse <- sapply(2:50,function(i) {
+    knn_i <- knn.reg(pt_df[,vars],y=pt_df[,varname],
+                     k=i,algorithm='kd_tree')
+    (pt_df[,varname] - knn_i$pred)^2 %>% mean %>% sqrt
+  })
+  k <- which.min(k_rmse)
+  paste0('Using k = ',k) %>% print
+  pred_knn <- knn.reg(train=pt_df[,vars],test=extrema[,vars],
+                      y=pt_df[,varname],k=k,algorithm='kd_tree')
+  extrema[,varname] <- pred_knn$pred
+  extrema
 }
 
-# test
-# library(ggmap)
-# geocode('1300 Pennsylvania Ave., Washington, DC, USA')
-# get_pop_dens(38.89401,-77.03045)
-
 ###############################################################################
-# Get country based on lat/long
-# I'm getting rate-limited by the DSTK API; I need a better way to do this.
-# https://gis.stackexchange.com/questions/64513/checking-if-lng-and-lat-fall-inside-polygons-from-esri-shapefile
+## Get "offshore" points for bodies of water -- places where
+# LandScan gives an NA value. Ideally these should be close to
+# shore so that I'm not kriging the ocean.
 ###############################################################################
-get_adm0 <- function(lat,long,method='google') {
-  if (method=='google') {
-    rgc <- revgeocode(location=c(long,lat),output='more')
-    return(as.character(rgc$country))
-  } else {
-    url  <- "http://www.datasciencetoolkit.org"
-    path <- paste0('coordinates2politics/',lat,'%2c',long)
-    raw.result <- GET(url = url, path = path)
-    if (raw.result$status_code != 200) {
-      return(NULL)
+get_shore_pts <- function(r,npts,pt_df,dist_cutoff=0.5,seed=12345) {
+  set.seed(seed)
+  res <- data.frame()
+  while (nrow(res) < npts) {
+    x <- runif(1,min=r@extent@xmin,max=r@extent@xmax)
+    y <- runif(1,min=r@extent@ymin,max=r@extent@ymax)
+    p <- extract(r,cbind(x,y))
+    if (is.na(p)) { # should be in the water
+      c <- closest_dist(y,x,pt_df)
+      if (c < dist_cutoff) { # should be close to shore
+        res <- rbind(res,data.frame(lat=y,long=x))
+      }
     }
-    res <- raw.result$content %>% rawToChar %>% fromJSON
-    if (is.na(res$politics)) { return(NA) }
-    rp <- res$politics[[1]]
-    return(rp[rp$friendly_type=='country','name'])
   }
+  res
 }
 
 ###############################################################################
-# Add dummy points to map
+# Load Tanzania-specific data
 ###############################################################################
 tzn_data <- read.csv('tzn_dhs_2016.csv') %>% filter(lat != 0)
+ls <- get_ls(tzn_data)
+tzn_shp <- readOGR(dsn="./tzn_borders", layer="tzn_borders")
 
-ggplot(tzn_data,aes(x=long,y=lat,color=mobile)) +
+###############################################################################
+# Enrich and visualize
+###############################################################################
+zp <- get_zero_pts(ls,tzn_shp,200,tzn_data,cutoff=2)
+extrema <- get_bounding_pts(tzn_shp,tzn_data,'mobile')
+shore <- get_shore_pts(ls,1000,tzn_data)
+
+## Zero-point visualization
+tzn_data %>%
+  dplyr::select(lat,long) %>%
+  mutate(zero=FALSE) %>%
+  rbind(zp %>% mutate(zero=TRUE)) %>%
+  ggplot(aes(x=long,y=lat,color=zero)) +
+    geom_point(size=4) +
+    coord_equal()
+
+tzn_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  write.csv('tzn_zero.csv',row.names=FALSE)
+
+## Extrema visualization
+tzn_data %>%
+  dplyr::select(lat,long) %>%
+  mutate(ex=FALSE) %>%
+  rbind(extrema %>% dplyr::select(lat,long) %>% mutate(ex=TRUE)) %>%
+  ggplot(aes(x=long,y=lat,color=ex)) +
   geom_point(size=4) +
-  scale_color_gradient(name='Electrification',low='#F7FCF5',high='#00441B') 
-# Tanzania map has some pretty big holes in it
+  coord_equal()
 
-df <- tzn_data %>%
-  select(lat,long) %>%
-  mutate(dummy=0)
-x_spacing <- (max(df$long)-min(df$long))/sqrt(nrow(df))
-y_spacing <- (max(df$lat)-min(df$lat))/sqrt(nrow(df))
-buffer2 <- x_spacing^2+y_spacing^2
-dr <- buffer2/100
-x.min <- min(df$long)-x_spacing
-x.max <- max(df$long)+x_spacing
-y.min <- min(df$lat)-y_spacing
-y.max <- max(df$lat)+y_spacing
+tzn_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(extrema) %>%
+  write.csv('tzn_zero_ext.csv',row.names=FALSE)
 
-dummies <- data.frame()
-for (x in seq(x.min,x.max,x_spacing)) {
-  for (y in seq(y.min,y.max,y_spacing)) {
-    new_dummy <- data.frame(lat=y,long=x,dummy=1)
-    dummies <- rbind(dummies,new_dummy)
-  }
-}
+## Shore visualization
+tzn_shore <- tzn_data %>%
+  dplyr::select(lat,long) %>% 
+  mutate(water=FALSE) %>%
+  rbind(shore %>% mutate(water=TRUE))
 
-closest_dist2 <- function(i) {
-  df_i <- df %>%
-    mutate(d=(lat-dummies[i,'lat'])^2 + (long-dummies[i,'long'])^2)
-  min(df_i$d)
-}
+tzn_shp %>% shp2df %>%
+  ggplot(aes(long,lat)) + 
+    geom_polygon(fill='gray85') +
+    geom_path(color="black") +
+    coord_equal() +
+    geom_point(data=tzn_shore,size=2,aes(color=water)) 
 
-dummies$d2 <- sapply(1:nrow(dummies),closest_dist2)
-dummies <- dummies %>%
-  filter(d2 > buffer2/2) %>%
-  select(lat,long,dummy)
+tzn_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(extrema) %>%
+  rbind(shore %>% mutate(mobile=0)) %>%
+  write.csv('tzn_zero_ext_water.csv',row.names=FALSE)
 
-all <- rbind(df,dummies)
-ggplot(all,aes(x=long,y=lat,color=dummy)) +
-  geom_point(size=4)
-
-# Query only dummies in Tanzania
-dummy_adm0 <- sapply(1:nrow(dummies),
-                     function(i) {
-                       print(i)
-                       get_adm0(dummies$lat[i],dummies$long[i])}) 
-
-dummies$query <- sapply(dummy_adm0,
-                         function(x) ('Tanzania' %in% x))
-
-
-all <- df %>%
-  mutate(query=FALSE) %>%
-  rbind(dummies)
-
-all$adm0 <- NA
-all[all$dummy==0,'adm0'] <- 'Tanzania'
-all[all$dummy==1,'adm0'] <- sapply(dummy_adm0,function(x) 
-  ifelse('Tanzania' %in% x,'Tanzania',x[1]))
-
-ggplot(all,aes(x=long,y=lat,color=adm0)) +
-  geom_point(size=4)
-
-tzn <- all %>% filter(adm0=='Tanzania')
-tzn$pop_dens <- sapply(1:nrow(tzn),function(i)
-  get_pop_dens(dummies$lat[i],dummies$long[i]))
-
-# For set of sampling locations, find the point that is located within borders
-#   but has the largest possible radius around it with no points in it. (Rough heuristic OK.)
-# --> do this using a potential function, maybe? Inverse of distance to nearest data point or border
-# --> resources here: https://cran.r-project.org/web/views/Optimization.html
-# Do this iteratively to get a collection of unsampled locations, continuing until 
-#   specified avg density is reached
-# Get pop. density for each, keep only the low-density ones
-# Augment real DHS data with dummy points 
-
-
-
-# Related task: make sure kriged surface extends all the way to borders
-# given shapefile, get a set of points along boundary (with defined spacing)
-# construct KNN model based on known points
-# use KNN model to predict values for border points
-# Augment real DHS data with these border points
-
-# Can also do something similar so that I get zero access in bodies of water 
-# and don't have predictions bleeding across to islands
+# TODO: Visualize the effects on the final kriged product (in AcrMap)
+# of adding in each of these components.
