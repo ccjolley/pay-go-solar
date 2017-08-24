@@ -127,6 +127,9 @@ get_bounding_pts <- function(shp,pt_df,varname,buf_scale=0.025) {
 ## Get "offshore" points for bodies of water -- places where
 # LandScan gives an NA value. Ideally these should be close to
 # shore so that I'm not kriging the ocean.
+#
+# This actually turns out not to be so useful, because high-density areas are
+# often coastal and this distorts them quite a bit.
 ###############################################################################
 get_shore_pts <- function(r,npts,pt_df,dist_cutoff=0.5,seed=12345) {
   set.seed(seed)
@@ -146,21 +149,10 @@ get_shore_pts <- function(r,npts,pt_df,dist_cutoff=0.5,seed=12345) {
 }
 
 ###############################################################################
-# Load Tanzania-specific data
+# Visualization functions
 ###############################################################################
-tzn_data <- read.csv('tzn_dhs_2016.csv') %>% filter(lat != 0)
-ls <- get_ls(tzn_data)
-tzn_shp <- readOGR(dsn="./tzn_borders", layer="tzn_borders")
-
-###############################################################################
-# Enrich and visualize
-###############################################################################
-zp <- get_zero_pts(ls,tzn_shp,200,tzn_data,cutoff=2)
-extrema <- get_bounding_pts(tzn_shp,tzn_data,'mobile')
-shore <- get_shore_pts(ls,1000,tzn_data)
 
 ## Zero-point visualization
-
 plot_zero <- function(df,zp) {
   df %>%
     dplyr::select(lat,long) %>%
@@ -170,13 +162,6 @@ plot_zero <- function(df,zp) {
     geom_point(size=4) +
     coord_equal()  
 }
-plot_zero(tzn_data)
-  
-
-tzn_data %>%
-  dplyr::select(lat,long,mobile) %>%
-  rbind(zp %>% mutate(mobile=0)) %>%
-  write.csv('tzn_zero.csv',row.names=FALSE)
 
 ## Extrema visualization
 plot_ext <- function(df,extrema) {
@@ -188,12 +173,6 @@ plot_ext <- function(df,extrema) {
     geom_point(size=4) +
     coord_equal()
 }
-
-tzn_data %>%
-  dplyr::select(lat,long,mobile) %>%
-  rbind(zp %>% mutate(mobile=0)) %>%
-  rbind(extrema) %>%
-  write.csv('tzn_zero_ext.csv',row.names=FALSE)
 
 ## Shore visualization
 plot_shore <- function(df,shp,shore) {
@@ -209,13 +188,6 @@ plot_shore <- function(df,shp,shore) {
       coord_equal() +
       geom_point(data=df_shore,size=2,aes(color=water)) 
 }
-
-tzn_data %>%
-  dplyr::select(lat,long,mobile) %>%
-  rbind(zp %>% mutate(mobile=0)) %>%
-  rbind(extrema) %>%
-  rbind(shore %>% mutate(mobile=0)) %>%
-  write.csv('tzn_zero_ext_water.csv',row.names=FALSE)
 
 ###############################################################################
 # Uganda
@@ -247,3 +219,112 @@ uga_data %>%
   rbind(extrema_elect) %>%
   rbind(shore %>% mutate(elect=0) %>% head(50)) %>%
   write.csv('uga_elect.csv',row.names=FALSE)
+
+###############################################################################
+# Zambia (got through these steps, but not the shapefile yet.)
+###############################################################################
+zmb_data <- read.csv('zmb_dhs_2014.csv') %>% filter(lat != 0)
+ls <- get_ls(zmb_data)
+zmb_shp <- readOGR(dsn="./zmb_borders", layer="zmb_borders")
+
+zp <- get_zero_pts(ls,zmb_shp,100,zmb_data,cutoff=1,check_adm0=TRUE) # use cutoff=1 for production
+plot_zero(zmb_data,zp) 
+extrema <- get_bounding_pts(zmb_shp,zmb_data,'mobile')
+extrema_elect <- get_bounding_pts(zmb_shp,zmb_data,'elect')
+plot_ext(zmb_data,extrema)
+
+zmb_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(extrema) %>%
+  write.csv('zmb_mobile.csv',row.names=FALSE)
+
+zmb_data %>%
+  dplyr::select(lat,long,elect) %>%
+  rbind(zp %>% mutate(elect=0)) %>%
+  rbind(extrema_elect) %>%
+  write.csv('zmb_elect.csv',row.names=FALSE)
+
+###############################################################################
+# Nigeria (haven't run this yet)
+###############################################################################
+nga_data <- read.csv('nga_dhs_2013.csv') %>% filter(lat != 0)
+ls <- get_ls(nga_data)
+nga_shp <- readOGR(dsn="./nga_borders", layer="nga_borders")
+
+# double-check whether any are in Nigeria
+zp <- get_zero_pts(ls,nga_shp,100,nga_data,cutoff=1,check_adm0=FALSE) 
+plot_zero(nga_data,zp) 
+zp <- get_zero_pts(ls,nga_shp,100,nga_data,cutoff=1,check_adm0=TRUE) 
+plot_zero(nga_data,zp) 
+extrema <- get_bounding_pts(nga_shp,nga_data,'mobile')
+extrema_elect <- get_bounding_pts(nga_shp,nga_data,'elect')
+plot_ext(nga_data,extrema)
+
+nga_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(extrema) %>%
+  write.csv('nga_mobile.csv',row.names=FALSE)
+
+nga_data %>%
+  dplyr::select(lat,long,elect) %>%
+  rbind(zp %>% mutate(elect=0)) %>%
+  rbind(extrema_elect) %>%
+  write.csv('nga_elect.csv',row.names=FALSE)
+
+###############################################################################
+# Tanzania (haven't run this yet)
+###############################################################################
+tzn_data <- read.csv('tzn_dhs_2016.csv') %>% filter(lat != 0)
+ls <- get_ls(tzn_data)
+tzn_shp <- readOGR(dsn="./tzn_borders", layer="tzn_borders")
+
+# double-check whether any are in Nigeria
+zp <- get_zero_pts(ls,tzn_shp,100,tzn_data,cutoff=1,check_adm0=FALSE) 
+plot_zero(tzn_data,zp) 
+zp <- get_zero_pts(ls,tzn_shp,100,tzn_data,cutoff=1,check_adm0=TRUE) 
+plot_zero(tzn_data,zp) 
+extrema <- get_bounding_pts(tzn_shp,tzn_data,'mobile')
+extrema_elect <- get_bounding_pts(tzn_shp,tzn_data,'elect')
+plot_ext(tzn_data,extrema)
+
+tzn_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(extrema) %>%
+  write.csv('tzn_mobile.csv',row.names=FALSE)
+
+tzn_data %>%
+  dplyr::select(lat,long,elect) %>%
+  rbind(zp %>% mutate(elect=0)) %>%
+  rbind(extrema_elect) %>%
+  write.csv('tzn_elect.csv',row.names=FALSE)
+
+###############################################################################
+# Rwanda
+###############################################################################
+rwa_data <- read.csv('rwa_dhs_2015.csv') %>% filter(lat != 0)
+ls <- get_ls(rwa_data)
+rwa_shp <- readOGR(dsn="./rwa_borders", layer="rwa_borders")
+
+# double-check whether any are in Nigeria
+zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=FALSE) 
+plot_zero(rwa_data,zp) 
+zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=TRUE) 
+plot_zero(rwa_data,zp) 
+extrema <- get_bounding_pts(rwa_shp,rwa_data,'mobile')
+extrema_elect <- get_bounding_pts(rwa_shp,rwa_data,'elect')
+plot_ext(rwa_data,extrema)
+
+rwa_data %>%
+  dplyr::select(lat,long,mobile) %>%
+  rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(extrema) %>%
+  write.csv('rwa_mobile.csv',row.names=FALSE)
+
+rwa_data %>%
+  dplyr::select(lat,long,elect) %>%
+  rbind(zp %>% mutate(elect=0)) %>%
+  rbind(extrema_elect) %>%
+  write.csv('rwa_elect.csv',row.names=FALSE)

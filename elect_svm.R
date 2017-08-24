@@ -15,7 +15,8 @@ nga_data <- read.csv('nga_dhs_2013.csv') %>% filter(lat != 0)
 uga <- read.csv('uga_elect.csv') # includes dummy points for water, etc.
 rwa <- rwa_data %>% dplyr::select(lat,long,elect)
 tzn <- tzn_data %>% dplyr::select(lat,long,elect)
-zmb <- zmb_data %>% dplyr::select(lat,long,elect)
+#zmb <- zmb_data %>% dplyr::select(lat,long,elect)
+zmb <- read.csv('zmb_elect.csv')
 nga <- nga_data %>% dplyr::select(lat,long,elect)
 
 color_scatter <- function(df) {
@@ -23,7 +24,7 @@ color_scatter <- function(df) {
     geom_point(size=4) +
     scale_color_gradient(name='Electrification',low='#F7FCF5',high='#00441B') 
 }
-color_scatter(uga) 
+color_scatter(zmb) 
 
 ###############################################################################
 # Re-optimize SVM for each -- turns out things vary quite a bit.
@@ -45,7 +46,7 @@ svm_tune(tzn) # eps = 0.5, cost=512, mse=0.07389062
 
 svm_tune(zmb) # eps=0.5, cost=256, MSE=0.8409718
 svm_tune(zmb,eps_vals=seq(0.2,0.6,0.02),c_vals=seq(100,500,100))
-# eps = 0.48, cost=400, MSE=0.8335141
+# eps = 0.5, cost=500, MSE=0.8335141
 
 svm_tune(nga) # eps = 0.6, cost = 64, MSE=0.1401751
 svm_tune(nga,eps_vals=seq(0.5,0.65,0.015))
@@ -60,7 +61,7 @@ svm_tune(uga,eps_vals=seq(0.1,0.3,0.02),c_vals=seq(500,1500,200))
 #   Assumes that df will have columns named 'lat','long', and 'elect'
 #   wrapper should be a function that will return an array of predictions
 ###############################################################################
-make_elect_shp <- function(df,wrapper,out_name=NULL,thresh=0.5,
+make_elect_shp <- function(df,wrapper,out_name=NULL,thresh=0.4,
                            enrich_pts=NULL,res=0.008333333) {
   # Raster setup
   print('Making raster...')
@@ -78,7 +79,7 @@ make_elect_shp <- function(df,wrapper,out_name=NULL,thresh=0.5,
   print('Cleaning up...')
   r1 <- setValues(r1,pred)
   if (!is.null(out_name)) {
-    r2 <- setValues(r1,pred > 0.5)
+    r2 <- setValues(r1,pred > thresh)
     pg1 <- rasterToPolygons(r2,function(x) {x ==1},dissolve=TRUE)
     writeOGR(obj=pg1, dsn=out_name, layer=out_name, driver="ESRI Shapefile")
   }
@@ -120,9 +121,12 @@ tzn_svm <- make_elect_shp(tzn,function(df,pts) svm_wrap(df,pts,0.5,512),
 plot(tzn_svm)
 color_scatter(tzn)
 
-zmb_svm <- make_elect_shp(zmb,function(df,pts) svm_wrap(df,pts,0.48,400),
+zmb_svm <- make_elect_shp(zmb,function(df,pts) svm_wrap(df,pts,0.5,500),
                           'zmb_svm') %>% bound_raster
 plot(zmb_svm) 
+# cutoff of 40% instead of 50% gets me the northern cluster as well
+# I think this is worth doing
+setValues(zmb_svm,getValues(zmb_svm) > 0.4) %>% plot
 color_scatter(zmb)
 
 nga_svm <- make_elect_shp(nga,function(df,pts) svm_wrap(df,pts,0.575,128),
@@ -142,7 +146,7 @@ setValues(uga_svm,getValues(uga_svm) > 0.25) %>% plot
 ###############################################################################
 # Select the relevant area and refine 
 ###############################################################################
-better_shp <- function(shp_name,df,eps,c,target=0.5) {
+better_shp <- function(shp_name,df,eps,c,target=0.4) {
   my_shp <- readOGR(dsn = shp_name, layer = shp_name)
   my_xy <- my_shp@polygons[[1]]@Polygons
   my_pts <- sapply(1:length(my_xy),function(i) {
@@ -171,7 +175,7 @@ better_shp <- function(shp_name,df,eps,c,target=0.5) {
   coordinates(my_opt)<-~long+lat
   fname <- paste0(shp_name,'_opt')
   paste0('Writing shapefile ',fname) %>% print
-  writeOGR(uga_opt, dsn=fname, layer=fname, driver='ESRI Shapefile')
+  writeOGR(my_opt, dsn=fname, layer=fname, driver='ESRI Shapefile')
   # show it off
   my_opt %>% data.frame %>%
     dplyr::select(long,lat) %>%
@@ -182,7 +186,8 @@ better_shp <- function(shp_name,df,eps,c,target=0.5) {
     theme_classic()
 }
 
-better_shp('rwa_svm',rwa,0.52,900)
+better_shp('rwa_svm',rwa,0.52,900) # re-do; this was wrong before
+better_shp('zmb_svm',zmb,0.5,500) # try again when I have lots of time.
 
 
 
