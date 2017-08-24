@@ -45,25 +45,28 @@ load_dhs <- function(dirname,cname=NULL) {
 }
 
 # Most recent DHS for Power Africa countries
-eth_2011 <- load_dhs("Ethiopia DHS 2011",'Ethiopia')
+eth_2016 <- load_dhs("Ethiopia DHS 2016",'Ethiopia')
 gha_2014 <- load_dhs("Ghana DHS 2014",'Ghana')
 ken_2014 <- load_dhs("Kenya DHS 2014",'Kenya')
 lbr_2013 <- load_dhs("Liberia DHS 2013",'Liberia')
-mwi_2010 <- load_dhs("Malawi DHS 2010",'Malawi')
+mwi_2016 <- load_dhs("Malawi DHS 2016",'Malawi')
 nga_2013 <- load_dhs("Nigeria DHS 2013",'Nigeria')
-sen_2014 <- load_dhs("Senegal DHS 2014",'Senegal')
+sen_2015 <- load_dhs("Senegal DHS 2015",'Senegal')
 sle_2013 <- load_dhs("Sierra Leone DHS 2013",'Sierra Leone')
 tza_2016 <- load_dhs("Tanzania DHS 2016",'Tanzania')
 uga_2011 <- load_dhs("Uganda DHS 2011",'Uganda')
 rwa_2015 <- load_dhs("Rwanda DHS 2015",'Rwanda')
 zmb_2014 <- load_dhs('Zambia DHS 2013-4','Zambia')
 
-# Older DHS surveys (DHS-V) containing the same indicators
+# Older DHS surveys containing the same indicators
+# eth_2011 <- load_dhs("Ethiopia DHS 2011",'Ethiopia')
 # gha_2008 <- load_dhs("Ghana DHS 2008",'Ghana')
 # ken_2009 <- load_dhs("Kenya DHS 2008-9",'Kenya')
 # lbr_2007 <- load_dhs('Liberia DHS 2007','Liberia')
+# mwi_2010 <- load_dhs("Malawi DHS 2010",'Malawi')
 # nga_2008 <- load_dhs('Nigeria DHS 2008','Nigeria')
 # rwa_2010 <- load_dhs('Rwanda DHS 2010','Rwanda')
+# sen_2014 <- load_dhs("Senegal DHS 2014",'Senegal')
 # sle_2008 <- load_dhs('Sierra Leone DHS 2008','Sierra Leone')
 # uga_2006 <- load_dhs('Uganda DHS 2006','Uganda')
 # zmb_2007 <- load_dhs('Zambia DHS 2007','Zambia')

@@ -1,6 +1,7 @@
 library(llamar)
 library(ggplot2)
-source('read-DHS.R')
+# Keep the next line commented if calling this from latent_demand.R
+#source('read-DHS.R')  
 
 ###############################################################################
 # Get historical household electrification rates from DHS API
@@ -57,13 +58,13 @@ elect_now <- function(df,cname) {
   df
 }
 
-eth_2011 <- elect_now(eth_2011,'Ethiopia')
+eth_2016 <- elect_now(eth_2016,'Ethiopia')
 gha_2014 <- elect_now(gha_2014,'Ghana')
 ken_2014 <- elect_now(ken_2014,'Kenya')
 lbr_2013 <- elect_now(lbr_2013,'Liberia')
-mwi_2010 <- elect_now(mwi_2010,'Malawi')
+mwi_2016 <- elect_now(mwi_2016,'Malawi')
 nga_2013 <- elect_now(nga_2013,'Nigeria')
-sen_2014 <- elect_now(sen_2014,'Senegal')
+sen_2015 <- elect_now(sen_2015,'Senegal')
 sle_2013 <- elect_now(sle_2013,'Sierra Leone')
 tza_2016 <- elect_now(tza_2016,'Tanzania')
 uga_2011 <- elect_now(uga_2011,'Uganda')

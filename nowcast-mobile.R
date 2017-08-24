@@ -77,13 +77,13 @@ mobile_now <- function(df,cname) {
 
 # Now, use predicted values in wpred to add mobile_now columns to my most recent
 # DHS datasets
-eth_2011 <- mobile_now(eth_2011,'Ethiopia')
+eth_2016 <- mobile_now(eth_2016,'Ethiopia')
 gha_2014 <- mobile_now(gha_2014,'Ghana')
 ken_2014 <- mobile_now(ken_2014,'Kenya')
 lbr_2013 <- mobile_now(lbr_2013,'Liberia')
-mwi_2010 <- mobile_now(mwi_2010,'Malawi')
+mwi_2016 <- mobile_now(mwi_2016,'Malawi')
 nga_2013 <- mobile_now(nga_2013,'Nigeria')
-sen_2014 <- mobile_now(sen_2014,'Senegal')
+sen_2015 <- mobile_now(sen_2015,'Senegal')
 sle_2013 <- mobile_now(sle_2013,'Sierra Leone')
 tza_2016 <- mobile_now(tza_2016,'Tanzania')
 uga_2011 <- mobile_now(uga_2011,'Uganda')
