@@ -112,3 +112,7 @@ make_raster('Zambia-electric.tif',palette='electric',outname='zmb_epop.tif')
 setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Rwanda DHS 2015")
 make_raster('Rwanda-mobile.tif',outname='rwa_mpop.tif')
 make_raster('Rwanda-electric.tif',palette='electric',outname='rwa_epop.tif')
+
+setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Uganda DHS 2011")
+make_raster('uga_mobile.tif',outname='uga_mpop.tif')
+make_raster('tza_elect.tif',palette='electric',outname='tza_epop.tif')
