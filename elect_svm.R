@@ -17,14 +17,15 @@ rwa <- rwa_data %>% dplyr::select(lat,long,elect)
 tzn <- tzn_data %>% dplyr::select(lat,long,elect)
 #zmb <- zmb_data %>% dplyr::select(lat,long,elect)
 zmb <- read.csv('zmb_elect.csv')
-nga <- nga_data %>% dplyr::select(lat,long,elect)
+#nga <- nga_data %>% dplyr::select(lat,long,elect)
+nga <- read.csv('nga_elect.csv')
 
 color_scatter <- function(df) {
   ggplot(df,aes(x=long,y=lat,color=elect)) +
     geom_point(size=4) +
     scale_color_gradient(name='Electrification',low='#F7FCF5',high='#00441B') 
 }
-color_scatter(zmb) 
+color_scatter(nga) 
 
 ###############################################################################
 # Re-optimize SVM for each -- turns out things vary quite a bit.
@@ -50,7 +51,7 @@ svm_tune(zmb,eps_vals=seq(0.2,0.6,0.02),c_vals=seq(100,500,100))
 
 svm_tune(nga) # eps = 0.6, cost = 64, MSE=0.1401751
 svm_tune(nga,eps_vals=seq(0.5,0.65,0.015))
-# eps = 0.575, cost = 128
+# eps = 0.545, cost = 64
 
 svm_tune(uga)
 svm_tune(uga,eps_vals=seq(0.1,0.3,0.02),c_vals=seq(500,1500,200))
@@ -129,9 +130,9 @@ plot(zmb_svm)
 setValues(zmb_svm,getValues(zmb_svm) > 0.4) %>% plot
 color_scatter(zmb)
 
-nga_svm <- make_elect_shp(nga,function(df,pts) svm_wrap(df,pts,0.575,128),
+nga_svm <- make_elect_shp(nga,function(df,pts) svm_wrap(df,pts,0.545,64),
                           'nga_svm',res=0.02) %>% bound_raster
-plot(nga_svm)
+setValues(nga_svm,getValues(nga_svm) > 0.4) %>% plot
 color_scatter(nga)
 
 uga_svm <- make_elect_shp(uga,function(df,pts) svm_wrap(df,pts,0.575,128),
@@ -144,26 +145,35 @@ setValues(uga_svm,getValues(uga_svm) > 0.5) %>% plot
 setValues(uga_svm,getValues(uga_svm) > 0.25) %>% plot
 
 ###############################################################################
-# Select the relevant area and refine 
+# See which polygons we want
 ###############################################################################
-better_shp <- function(shp_name,df,eps,c,target=0.4) {
+view_poly <- function(shp_name,df) {
   my_shp <- readOGR(dsn = shp_name, layer = shp_name)
   my_xy <- my_shp@polygons[[1]]@Polygons
-  my_pts <- sapply(1:length(my_xy),function(i) {
-    # check to see whether polygon is within ROI
+  my_pts <- plyr::ldply(1:length(my_xy), function(i) {
     xy_i <- my_xy[[i]]@coords %>% 
       data.frame %>%
       rename(lat=X2,long=X1) %>% 
       mutate(poly=i)
-    if (min(xy_i$lat) >= min(df$lat) &
-        max(xy_i$lat) <= max(df$lat) &
-        min(xy_i$long) >= min(df$long) &
-        max(xy_i$long) <= max(df$long)) {
-      xy_i
-    } else {
-      return(NULL)
-    }
-  }) %>% do.call(rbind,.) 
+    xy_i
+  }) %>% mutate(poly=as.factor(poly))
+  ggplot(my_pts,aes(x=long,y=lat,color=poly)) +
+    geom_point() +
+    theme_classic()
+}
+
+###############################################################################
+# Select the relevant area and refine 
+###############################################################################
+better_shp <- function(shp_name,polylist,df,eps,c,target=0.4) {
+  my_shp <- readOGR(dsn = shp_name, layer = shp_name)
+  my_xy <- my_shp@polygons[[1]]@Polygons
+  my_pts <- plyr::ldply(polylist,function(i) {
+    xy_i <- my_xy[[i]]@coords %>% 
+      data.frame %>%
+      rename(lat=X2,long=X1) %>% 
+      mutate(poly=i)
+  }) 
   my_svm <- svm(elect~.,df,epsilon=eps,cost=c)
   opt_wrap <- function(par) {
     d <- data.frame(long=par[1],lat=par[2])
@@ -186,8 +196,13 @@ better_shp <- function(shp_name,df,eps,c,target=0.4) {
     theme_classic()
 }
 
+# Calculated these with an older version of better_shp that used different parameters...
 better_shp('rwa_svm',rwa,0.52,900) # re-do; this was wrong before
 better_shp('zmb_svm',zmb,0.5,500) # try again when I have lots of time.
+
+view_poly('nga_svm',nga)
+better_shp('nga_svm',c(3,5),nga,0.545,64) 
+
 
 
 

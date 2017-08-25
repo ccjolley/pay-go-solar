@@ -39,14 +39,16 @@ shp2df <- function(shp) {
 ###############################################################################
 # Prepare landscan raster
 ###############################################################################
-get_ls <- function(pts_df) {
+get_ls <- function(pts_df,scale=0.05) {
   xmin <- min(pts_df$long)
   xmax <- max(pts_df$long)
-  xbuf <- 0.05*(xmax-xmin)
+  xbuf <- scale*(xmax-xmin)
+  paste0('xbuf = ',xbuf) %>% print
   ymin <- min(pts_df$lat)
   ymax <- max(pts_df$lat)
-  ybuf <- 0.05*(ymax-ymin)
-  f <- "C:/Users/Craig/Desktop/Live projects/bivar-raster/landscan-pop/w001001x.adf"
+  ybuf <- scale*(ymax-ymin)
+  paste0('ybuf = ',ybuf) %>% print
+  f <- "C:/Users/Craig/Documents/ArcGIS/LandScan/LS2016CDROM/ArcGIS/Population/lspop2016/w001001x.adf"
   raster(f) %>% crop(extent(xmin-xbuf,xmax+xbuf,ymin-ybuf,ymax+ybuf))
 }
 
@@ -106,7 +108,7 @@ get_bounding_pts <- function(shp,pt_df,varname,buf_scale=0.025) {
            lat_=ifelse(lat_==lat_max,lat_max+lat_buf,lat_),
            long_=ifelse(long==long_min,long_min-long_buf,long),
            long_=ifelse(long_==long_max,long_max+long_buf,long_)) %>%
-    select(lat_,long_) %>%
+    dplyr::select(lat_,long_) %>%
     rename(lat=lat_,long=long_)
   # Select optimal value of k for KNN model
   vars <- c('lat','long')
@@ -131,16 +133,16 @@ get_bounding_pts <- function(shp,pt_df,varname,buf_scale=0.025) {
 # This actually turns out not to be so useful, because high-density areas are
 # often coastal and this distorts them quite a bit.
 ###############################################################################
-get_shore_pts <- function(r,npts,pt_df,dist_cutoff=0.5,seed=12345) {
+get_shore_pts <- function(r,npts,pt_df,dist_min=0.5,dist_max=1.0,seed=12345) {
   set.seed(seed)
   res <- data.frame()
   while (nrow(res) < npts) {
-    x <- runif(1,min=r@extent@xmin,max=r@extent@xmax)
-    y <- runif(1,min=r@extent@ymin,max=r@extent@ymax)
+    x <- runif(1,min=r@extent@xmin-dist_max,max=r@extent@xmax+dist_max)
+    y <- runif(1,min=r@extent@ymin-dist_max,max=r@extent@ymax+dist_max)
     p <- extract(r,cbind(x,y))
     if (is.na(p)) { # should be in the water
       c <- closest_dist(y,x,pt_df)
-      if (c < dist_cutoff) { # should be close to shore
+      if (c > dist_min & c < dist_max) { # should be close to shore
         res <- rbind(res,data.frame(lat=y,long=x))
       }
     }
@@ -221,7 +223,7 @@ uga_data %>%
   write.csv('uga_elect.csv',row.names=FALSE)
 
 ###############################################################################
-# Zambia (got through these steps, but not the shapefile yet.)
+# Zambia
 ###############################################################################
 zmb_data <- read.csv('zmb_dhs_2014.csv') %>% filter(lat != 0)
 ls <- get_ls(zmb_data)
@@ -246,30 +248,34 @@ zmb_data %>%
   write.csv('zmb_elect.csv',row.names=FALSE)
 
 ###############################################################################
-# Nigeria (haven't run this yet)
+# Nigeria
 ###############################################################################
 nga_data <- read.csv('nga_dhs_2013.csv') %>% filter(lat != 0)
-ls <- get_ls(nga_data)
+ls <- get_ls(nga_data,scale=0.25)
 nga_shp <- readOGR(dsn="./nga_borders", layer="nga_borders")
 
 # double-check whether any are in Nigeria
 zp <- get_zero_pts(ls,nga_shp,100,nga_data,cutoff=1,check_adm0=FALSE) 
 plot_zero(nga_data,zp) 
-zp <- get_zero_pts(ls,nga_shp,100,nga_data,cutoff=1,check_adm0=TRUE) 
+zp <- get_zero_pts(ls,nga_shp,25,nga_data,cutoff=1,check_adm0=TRUE) 
 plot_zero(nga_data,zp) 
 extrema <- get_bounding_pts(nga_shp,nga_data,'mobile')
 extrema_elect <- get_bounding_pts(nga_shp,nga_data,'elect')
 plot_ext(nga_data,extrema)
+shore <- get_shore_pts(ls,100,nga_data,dist_min=1.0,dist_max=2.0)
+plot_shore(nga_data,nga_shp,shore)
 
 nga_data %>%
   dplyr::select(lat,long,mobile) %>%
   rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(shore %>% mutate(mobile=0)) %>% 
   rbind(extrema) %>%
   write.csv('nga_mobile.csv',row.names=FALSE)
 
 nga_data %>%
   dplyr::select(lat,long,elect) %>%
   rbind(zp %>% mutate(elect=0)) %>%
+  rbind(shore %>% mutate(elect=0)) %>% 
   rbind(extrema_elect) %>%
   write.csv('nga_elect.csv',row.names=FALSE)
 
