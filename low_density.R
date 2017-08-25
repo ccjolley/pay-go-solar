@@ -280,30 +280,34 @@ nga_data %>%
   write.csv('nga_elect.csv',row.names=FALSE)
 
 ###############################################################################
-# Tanzania (haven't run this yet)
+# Tanzania
 ###############################################################################
 tzn_data <- read.csv('tzn_dhs_2016.csv') %>% filter(lat != 0)
-ls <- get_ls(tzn_data)
+ls <- get_ls(tzn_data,scale=0.25)
 tzn_shp <- readOGR(dsn="./tzn_borders", layer="tzn_borders")
 
-# double-check whether any are in Nigeria
+# double-check whether any are in Tanzania
 zp <- get_zero_pts(ls,tzn_shp,100,tzn_data,cutoff=1,check_adm0=FALSE) 
 plot_zero(tzn_data,zp) 
-zp <- get_zero_pts(ls,tzn_shp,100,tzn_data,cutoff=1,check_adm0=TRUE) 
+zp <- get_zero_pts(ls,tzn_shp,50,tzn_data,cutoff=1,check_adm0=TRUE) 
 plot_zero(tzn_data,zp) 
 extrema <- get_bounding_pts(tzn_shp,tzn_data,'mobile')
 extrema_elect <- get_bounding_pts(tzn_shp,tzn_data,'elect')
 plot_ext(tzn_data,extrema)
+shore <- get_shore_pts(ls,100,tzn_data,dist_min=1.0,dist_max=2.0)
+plot_shore(tzn_data,tzn_shp,shore)
 
 tzn_data %>%
   dplyr::select(lat,long,mobile) %>%
   rbind(zp %>% mutate(mobile=0)) %>%
+  rbind(shore %>% mutate(mobile=0)) %>%
   rbind(extrema) %>%
   write.csv('tzn_mobile.csv',row.names=FALSE)
 
 tzn_data %>%
   dplyr::select(lat,long,elect) %>%
   rbind(zp %>% mutate(elect=0)) %>%
+  rbind(shore %>% mutate(elect=0)) %>%
   rbind(extrema_elect) %>%
   write.csv('tzn_elect.csv',row.names=FALSE)
 
@@ -314,7 +318,7 @@ rwa_data <- read.csv('rwa_dhs_2015.csv') %>% filter(lat != 0)
 ls <- get_ls(rwa_data)
 rwa_shp <- readOGR(dsn="./rwa_borders", layer="rwa_borders")
 
-# double-check whether any are in Nigeria
+# double-check whether any are in Rwanda
 zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=FALSE) 
 plot_zero(rwa_data,zp) 
 zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=TRUE) 

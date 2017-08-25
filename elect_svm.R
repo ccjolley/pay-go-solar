@@ -14,7 +14,8 @@ nga_data <- read.csv('nga_dhs_2013.csv') %>% filter(lat != 0)
 
 uga <- read.csv('uga_elect.csv') # includes dummy points for water, etc.
 rwa <- rwa_data %>% dplyr::select(lat,long,elect)
-tzn <- tzn_data %>% dplyr::select(lat,long,elect)
+# tzn <- tzn_data %>% dplyr::select(lat,long,elect)
+tzn <- read.csv('tzn_elect.csv')
 #zmb <- zmb_data %>% dplyr::select(lat,long,elect)
 zmb <- read.csv('zmb_elect.csv')
 #nga <- nga_data %>% dplyr::select(lat,long,elect)
@@ -25,7 +26,7 @@ color_scatter <- function(df) {
     geom_point(size=4) +
     scale_color_gradient(name='Electrification',low='#F7FCF5',high='#00441B') 
 }
-color_scatter(nga) 
+color_scatter(tzn) 
 
 ###############################################################################
 # Re-optimize SVM for each -- turns out things vary quite a bit.
@@ -43,7 +44,9 @@ svm_tune(rwa) # eps = 0.5, cost=512, mse=0.06766672
 svm_tune(rwa,eps_vals=seq(0.4,0.6,0.01),c_vals=seq(500,1500,200))
 # eps = 0.52, cost=900, mse=0.06668185
 
-svm_tune(tzn) # eps = 0.5, cost=512, mse=0.07389062
+svm_tune(tzn) # eps = 0.4, cost=512, mse=0.07389062
+svm_tune(tzn,eps_vals=seq(0.3,0.5,0.01),c_vals=seq(400,1600,200))
+# eps = 0.43, cost = 1600
 
 svm_tune(zmb) # eps=0.5, cost=256, MSE=0.8409718
 svm_tune(zmb,eps_vals=seq(0.2,0.6,0.02),c_vals=seq(100,500,100))
@@ -117,9 +120,10 @@ rwa_svm <- make_elect_shp(rwa,function(df,pts) svm_wrap(df,pts,0.52,900),
 plot(rwa_svm)
 color_scatter(rwa)
 
-tzn_svm <- make_elect_shp(tzn,function(df,pts) svm_wrap(df,pts,0.5,512),
+tzn_svm <- make_elect_shp(tzn,function(df,pts) svm_wrap(df,pts,0.43,1600),
                           'tzn_svm',res=0.02) %>% bound_raster
 plot(tzn_svm)
+setValues(tzn_svm,getValues(tzn_svm) > 0.4) %>% plot
 color_scatter(tzn)
 
 zmb_svm <- make_elect_shp(zmb,function(df,pts) svm_wrap(df,pts,0.5,500),
@@ -147,7 +151,7 @@ setValues(uga_svm,getValues(uga_svm) > 0.25) %>% plot
 ###############################################################################
 # See which polygons we want
 ###############################################################################
-view_poly <- function(shp_name,df) {
+view_poly <- function(shp_name) {
   my_shp <- readOGR(dsn = shp_name, layer = shp_name)
   my_xy <- my_shp@polygons[[1]]@Polygons
   my_pts <- plyr::ldply(1:length(my_xy), function(i) {
@@ -200,12 +204,14 @@ better_shp <- function(shp_name,polylist,df,eps,c,target=0.4) {
 better_shp('rwa_svm',rwa,0.52,900) # re-do; this was wrong before
 better_shp('zmb_svm',zmb,0.5,500) # try again when I have lots of time.
 
-view_poly('nga_svm',nga)
+view_poly('nga_svm')
 better_shp('nga_svm',c(3,5),nga,0.545,64) 
 
+view_poly('tzn_svm')
+better_shp('tzn_svm',3,tzn,0.43,1600) 
 
-
-
+# BIG PROBLEM: THIS ISN'T GETTING ME POLYGON SHAPEFILES. 
+# IT'S MAKING POINT SHAPEFILES. I'M GOING TO SCREAM.
 
 
 
