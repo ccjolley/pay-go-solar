@@ -195,7 +195,7 @@ plot_shore <- function(df,shp,shore) {
 # Uganda
 ###############################################################################
 uga_data <- read.csv('uga_dhs_2011.csv') %>% filter(lat != 0)
-ls <- get_ls(uga_data)
+ls <- get_ls(uga_data,scale=0.2)
 uga_shp <- readOGR(dsn="./uga_borders", layer="uga_borders")
 
 zp <- get_zero_pts(ls,uga_shp,200,uga_data,cutoff=1,check_adm0=FALSE) # use cutoff=1 for production
@@ -203,7 +203,7 @@ plot_zero(uga_data,zp) # none of them inside Uganda
 extrema <- get_bounding_pts(uga_shp,uga_data,'mobile')
 extrema_elect <- get_bounding_pts(uga_shp,uga_data,'elect')
 plot_ext(uga_data,extrema)
-shore <- get_shore_pts(ls,50,uga_data)
+shore <- get_shore_pts(ls,50,uga_data,dist_min=0.25,dist_max=1.0)
 plot_shore(uga_data,uga_shp,shore)
 
 uga_data %>%
@@ -219,7 +219,7 @@ uga_data %>%
 uga_data %>%
   dplyr::select(lat,long,elect) %>%
   rbind(extrema_elect) %>%
-  rbind(shore %>% mutate(elect=0) %>% head(50)) %>%
+  rbind(shore %>% mutate(elect=0)) %>%
   write.csv('uga_elect.csv',row.names=FALSE)
 
 ###############################################################################
@@ -319,22 +319,23 @@ ls <- get_ls(rwa_data)
 rwa_shp <- readOGR(dsn="./rwa_borders", layer="rwa_borders")
 
 # double-check whether any are in Rwanda
-zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=FALSE) 
-plot_zero(rwa_data,zp) 
-zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=TRUE) 
-plot_zero(rwa_data,zp) 
+zp <- get_zero_pts(ls,rwa_shp,10,rwa_data,cutoff=1,check_adm0=FALSE) 
+# even this doesn't get us anything
+# plot_zero(rwa_data,zp) 
+# zp <- get_zero_pts(ls,rwa_shp,100,rwa_data,cutoff=1,check_adm0=TRUE) 
+# plot_zero(rwa_data,zp) 
 extrema <- get_bounding_pts(rwa_shp,rwa_data,'mobile')
 extrema_elect <- get_bounding_pts(rwa_shp,rwa_data,'elect')
 plot_ext(rwa_data,extrema)
 
 rwa_data %>%
   dplyr::select(lat,long,mobile) %>%
-  rbind(zp %>% mutate(mobile=0)) %>%
+  #rbind(zp %>% mutate(mobile=0)) %>%
   rbind(extrema) %>%
   write.csv('rwa_mobile.csv',row.names=FALSE)
 
 rwa_data %>%
   dplyr::select(lat,long,elect) %>%
-  rbind(zp %>% mutate(elect=0)) %>%
+  #rbind(zp %>% mutate(elect=0)) %>%
   rbind(extrema_elect) %>%
   write.csv('rwa_elect.csv',row.names=FALSE)

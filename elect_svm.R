@@ -13,7 +13,8 @@ zmb_data <- read.csv('zmb_dhs_2014.csv') %>% filter(lat != 0)
 nga_data <- read.csv('nga_dhs_2013.csv') %>% filter(lat != 0)
 
 uga <- read.csv('uga_elect.csv') # includes dummy points for water, etc.
-rwa <- rwa_data %>% dplyr::select(lat,long,elect)
+#rwa <- rwa_data %>% dplyr::select(lat,long,elect)
+rwa <- read.csv('rwa_elect.csv')
 # tzn <- tzn_data %>% dplyr::select(lat,long,elect)
 tzn <- read.csv('tzn_elect.csv')
 #zmb <- zmb_data %>% dplyr::select(lat,long,elect)
@@ -26,7 +27,7 @@ color_scatter <- function(df) {
     geom_point(size=4) +
     scale_color_gradient(name='Electrification',low='#F7FCF5',high='#00441B') 
 }
-color_scatter(tzn) 
+color_scatter(uga) 
 
 ###############################################################################
 # Re-optimize SVM for each -- turns out things vary quite a bit.
@@ -40,9 +41,9 @@ svm_tune <- function(df,eps_vals=seq(0,1,0.1),c_vals=2^(2:9)) {
   plot(tuneResult)
 }
 
-svm_tune(rwa) # eps = 0.5, cost=512, mse=0.06766672
-svm_tune(rwa,eps_vals=seq(0.4,0.6,0.01),c_vals=seq(500,1500,200))
-# eps = 0.52, cost=900, mse=0.06668185
+svm_tune(rwa) # eps = 0.5, cost=512
+svm_tune(rwa,eps_vals=seq(0.25,0.75,0.05),c_vals=seq(500,1500,200))
+# eps = 0.65, cost = 1500
 
 svm_tune(tzn) # eps = 0.4, cost=512, mse=0.07389062
 svm_tune(tzn,eps_vals=seq(0.3,0.5,0.01),c_vals=seq(400,1600,200))
@@ -58,7 +59,7 @@ svm_tune(nga,eps_vals=seq(0.5,0.65,0.015))
 
 svm_tune(uga)
 svm_tune(uga,eps_vals=seq(0.1,0.3,0.02),c_vals=seq(500,1500,200))
-# eps = 0.3, cost = 1500
+# eps = 0.28, cost = 1500
 
 ###############################################################################
 # make_elect_shp()
@@ -115,7 +116,7 @@ bound_raster <- function(r) {
 ###############################################################################
 # Production time!
 ##############################################################################
-rwa_svm <- make_elect_shp(rwa,function(df,pts) svm_wrap(df,pts,0.52,900),
+rwa_svm <- make_elect_shp(rwa,function(df,pts) svm_wrap(df,pts,0.65,1500),
                           'rwa_svm') %>% bound_raster
 plot(rwa_svm)
 color_scatter(rwa)
@@ -139,9 +140,10 @@ nga_svm <- make_elect_shp(nga,function(df,pts) svm_wrap(df,pts,0.545,64),
 setValues(nga_svm,getValues(nga_svm) > 0.4) %>% plot
 color_scatter(nga)
 
-uga_svm <- make_elect_shp(uga,function(df,pts) svm_wrap(df,pts,0.575,128),
-                          'uga_tmp',res=0.02) %>% bound_raster
+uga_svm <- make_elect_shp(uga,function(df,pts) svm_wrap(df,pts,0.28,1500),
+                          'uga_svm',res=0.02) %>% bound_raster
 plot(uga_svm)
+setValues(uga_svm,getValues(uga_svm) > 0.4) %>% plot
 color_scatter(uga)
 
 # How low does Uganda have to go before I see anything other than Kampala?
@@ -200,9 +202,7 @@ better_shp <- function(shp_name,polylist,df,eps,c,target=0.4) {
     theme_classic()
 }
 
-# Calculated these with an older version of better_shp that used different parameters...
-better_shp('rwa_svm',rwa,0.52,900) # re-do; this was wrong before
-better_shp('zmb_svm',zmb,0.5,500) # try again when I have lots of time.
+# Re-run these once I get shapefiles working right.
 
 view_poly('nga_svm')
 better_shp('nga_svm',c(3,5),nga,0.545,64) 
@@ -210,9 +210,18 @@ better_shp('nga_svm',c(3,5),nga,0.545,64)
 view_poly('tzn_svm')
 better_shp('tzn_svm',3,tzn,0.43,1600) 
 
+view_poly('rwa_svm')
+better_shp('rwa_svm',3,rwa,0.65,1500) 
+
+view_poly('uga_svm')
+better_shp('uga_svm',2,uga,0.28,1500) 
+
+view_poly('zmb_svm')
+better_shp('zmb_svm',c(2,4),zmb,0.5,500) 
+
 # BIG PROBLEM: THIS ISN'T GETTING ME POLYGON SHAPEFILES. 
 # IT'S MAKING POINT SHAPEFILES. I'M GOING TO SCREAM.
-
+# https://stackoverflow.com/questions/21759134/convert-spatialpointsdataframe-to-spatialpolygons-in-r
 
 
 
