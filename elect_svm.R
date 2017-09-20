@@ -13,13 +13,9 @@ zmb_data <- read.csv('zmb_dhs_2014.csv') %>% filter(lat != 0)
 nga_data <- read.csv('nga_dhs_2013.csv') %>% filter(lat != 0)
 
 uga <- read.csv('uga_elect.csv') # includes dummy points for water, etc.
-#rwa <- rwa_data %>% dplyr::select(lat,long,elect)
 rwa <- read.csv('rwa_elect.csv')
-# tzn <- tzn_data %>% dplyr::select(lat,long,elect)
 tzn <- read.csv('tzn_elect.csv')
-#zmb <- zmb_data %>% dplyr::select(lat,long,elect)
 zmb <- read.csv('zmb_elect.csv')
-#nga <- nga_data %>% dplyr::select(lat,long,elect)
 nga <- read.csv('nga_elect.csv')
 
 color_scatter <- function(df) {
@@ -27,7 +23,7 @@ color_scatter <- function(df) {
     geom_point(size=4) +
     scale_color_gradient(name='Electrification',low='#F7FCF5',high='#00441B') 
 }
-color_scatter(uga) 
+color_scatter(zmb) 
 
 ###############################################################################
 # Re-optimize SVM for each -- turns out things vary quite a bit.
@@ -66,7 +62,7 @@ svm_tune(uga,eps_vals=seq(0.1,0.3,0.02),c_vals=seq(500,1500,200))
 #   Assumes that df will have columns named 'lat','long', and 'elect'
 #   wrapper should be a function that will return an array of predictions
 ###############################################################################
-make_elect_shp <- function(df,wrapper,out_name=NULL,thresh=0.4,
+make_elect_shp <- function(df,wrapper,out_name=NULL,thresh=0.5,
                            enrich_pts=NULL,res=0.008333333) {
   # Raster setup
   print('Making raster...')
@@ -124,7 +120,7 @@ color_scatter(rwa)
 tzn_svm <- make_elect_shp(tzn,function(df,pts) svm_wrap(df,pts,0.43,1600),
                           'tzn_svm',res=0.02) %>% bound_raster
 plot(tzn_svm)
-setValues(tzn_svm,getValues(tzn_svm) > 0.4) %>% plot
+setValues(tzn_svm,getValues(tzn_svm) > 0.5) %>% plot
 color_scatter(tzn)
 
 zmb_svm <- make_elect_shp(zmb,function(df,pts) svm_wrap(df,pts,0.5,500),
@@ -132,18 +128,18 @@ zmb_svm <- make_elect_shp(zmb,function(df,pts) svm_wrap(df,pts,0.5,500),
 plot(zmb_svm) 
 # cutoff of 40% instead of 50% gets me the northern cluster as well
 # I think this is worth doing
-setValues(zmb_svm,getValues(zmb_svm) > 0.4) %>% plot
+setValues(zmb_svm,getValues(zmb_svm) > 0.5) %>% plot
 color_scatter(zmb)
 
 nga_svm <- make_elect_shp(nga,function(df,pts) svm_wrap(df,pts,0.545,64),
                           'nga_svm',res=0.02) %>% bound_raster
-setValues(nga_svm,getValues(nga_svm) > 0.4) %>% plot
+setValues(nga_svm,getValues(nga_svm) > 0.5) %>% plot
 color_scatter(nga)
 
 uga_svm <- make_elect_shp(uga,function(df,pts) svm_wrap(df,pts,0.28,1500),
                           'uga_svm',res=0.02) %>% bound_raster
 plot(uga_svm)
-setValues(uga_svm,getValues(uga_svm) > 0.4) %>% plot
+setValues(uga_svm,getValues(uga_svm) > 0.5) %>% plot
 color_scatter(uga)
 
 # How low does Uganda have to go before I see anything other than Kampala?
@@ -169,9 +165,27 @@ view_poly <- function(shp_name) {
 }
 
 ###############################################################################
+# Utility function for making polygon shapefiles
+# https://stackoverflow.com/questions/21759134/convert-spatialpointsdataframe-to-spatialpolygons-in-r
+# NOTE: This is a much more general function than what I actually need for
+# this task.
+###############################################################################
+
+points2polygons <- function(df,data) {
+  get.grpPoly <- function(group,ID,df) {
+    Polygon(coordinates(df[df$id==ID & df$group==group,]))
+  }
+  get.spPoly  <- function(ID,df) {
+    Polygons(lapply(unique(df[df$id==ID,]$group),get.grpPoly,ID,df),ID)
+  }
+  spPolygons  <- SpatialPolygons(lapply(unique(df$id),get.spPoly,df))
+  SpatialPolygonsDataFrame(spPolygons,match.ID=T,data=data)
+}
+
+###############################################################################
 # Select the relevant area and refine 
 ###############################################################################
-better_shp <- function(shp_name,polylist,df,eps,c,target=0.4) {
+better_shp <- function(shp_name,polylist,df,eps,c,target=0.5) {
   my_shp <- readOGR(dsn = shp_name, layer = shp_name)
   my_xy <- my_shp@polygons[[1]]@Polygons
   my_pts <- plyr::ldply(polylist,function(i) {
@@ -188,10 +202,21 @@ better_shp <- function(shp_name,polylist,df,eps,c,target=0.4) {
   my_opt <- apply(my_pts,1,function(x) optimx(par=x,method='BFGS',fn=opt_wrap)) %>% 
     do.call(rbind,.) %>% data.frame
   # turn back into a shapefile
-  coordinates(my_opt)<-~long+lat
+  shp_me <- my_opt %>%
+    rename(x=long,y=lat,id=poly) %>%
+    dplyr::select(x,y,id) %>%
+    mutate(hole=F,piece=1,group=id,box_id=id) %>%
+    group_by(id) %>%
+    mutate(order=row_number()) %>%
+    ungroup()
+  coordinates(shp_me)<-~x+y
+    
+  shp_me_data <- data.frame(box_id=unique(shp_me$box_id),row.names=unique(shp_me$id))
+  shp_me2 <- points2polygons(shp_me,shp_me_data)
+
   fname <- paste0(shp_name,'_opt')
   paste0('Writing shapefile ',fname) %>% print
-  writeOGR(my_opt, dsn=fname, layer=fname, driver='ESRI Shapefile')
+  writeOGR(shp_me2, dsn=fname, layer=fname, driver='ESRI Shapefile')
   # show it off
   my_opt %>% data.frame %>%
     dplyr::select(long,lat) %>%
@@ -202,26 +227,21 @@ better_shp <- function(shp_name,polylist,df,eps,c,target=0.4) {
     theme_classic()
 }
 
-# Re-run these once I get shapefiles working right.
+view_poly('uga_svm')
+better_shp('uga_svm',1,uga,0.28,1500) 
 
 view_poly('nga_svm')
-better_shp('nga_svm',c(3,5),nga,0.545,64) 
+better_shp('nga_svm',c(2,4),nga,0.545,64) 
 
 view_poly('tzn_svm')
-better_shp('tzn_svm',3,tzn,0.43,1600) 
+better_shp('tzn_svm',2,tzn,0.43,1600) 
 
 view_poly('rwa_svm')
 better_shp('rwa_svm',3,rwa,0.65,1500) 
 
-view_poly('uga_svm')
-better_shp('uga_svm',2,uga,0.28,1500) 
-
 view_poly('zmb_svm')
-better_shp('zmb_svm',c(2,4),zmb,0.5,500) 
+better_shp('zmb_svm',2,zmb,0.5,500) 
 
-# BIG PROBLEM: THIS ISN'T GETTING ME POLYGON SHAPEFILES. 
-# IT'S MAKING POINT SHAPEFILES. I'M GOING TO SCREAM.
-# https://stackoverflow.com/questions/21759134/convert-spatialpointsdataframe-to-spatialpolygons-in-r
 
 
 
