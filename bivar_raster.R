@@ -97,22 +97,18 @@ make_raster <- function(f1,f2="C:/Users/Craig/Desktop/Live projects/bivar-raster
 # Make some rasters
 ###############################################################################
 
-setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Tanzania DHS 2016")
-make_raster('tza_mobile.tif',outname='tza_mpop.tif')
-make_raster('tza_elect.tif',palette='electric',outname='tza_epop.tif')
+setwd("C:/Users/Craig/Documents/ArcGIS/PAYG-new/Tanzania")
+make_raster('dhs_mobile.tif',outname='tzn_mpop.tif')
 
-setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Nigeria DHS 2013")
-make_raster('nga_mobile.tif',outname='nga_mpop.tif')
-make_raster('nga_elect.tif',palette='electric',outname='tza_epop.tif')
+setwd("C:/Users/Craig/Documents/ArcGIS/PAYG-new/Nigeria")
+make_raster('dhs_mobile.tif',outname='nga_mpop.tif')
 
-setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Zambia DHS 2013-4")
-make_raster('Zambia-mobile.tif',outname='zmb_mpop.tif')
-make_raster('Zambia-electric.tif',palette='electric',outname='zmb_epop.tif')
+setwd("C:/Users/Craig/Documents/ArcGIS/PAYG-new/Zambia")
+make_raster('dhs_data.tif',outname='zmb_mpop.tif')
 
-setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Rwanda DHS 2015")
-make_raster('Rwanda-mobile.tif',outname='rwa_mpop.tif')
-make_raster('Rwanda-electric.tif',palette='electric',outname='rwa_epop.tif')
+setwd("C:/Users/Craig/Documents/ArcGIS/PAYG-new/Rwanda")
+make_raster('dhs_mobile.tif',outname='rwa_mpop.tif')
 
-setwd("C:/Users/Craig/Desktop/Live projects/Pay-go solar/hh survey data/Uganda DHS 2011")
-make_raster('uga_mobile.tif',outname='uga_mpop.tif')
-make_raster('tza_elect.tif',palette='electric',outname='tza_epop.tif')
+setwd("C:/Users/Craig/Documents/ArcGIS/PAYG-new/Uganda")
+make_raster('dhs_mobile.tif',outname='uga_mpop.tif')
+
