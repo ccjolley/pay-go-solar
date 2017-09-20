@@ -78,3 +78,25 @@ ggplot(j,aes(x=m_acct,y=hdi,label=label_text)) +
         axis.text.y = element_blank(),
         legend.position='none')
 
+###############################################################################
+# New version of this plot: Label and highlight only SS African countries.
+###############################################################################
+afr_list <- c("Benin","Botswana","Burkina Faso","Chad","Congo, Dem. Rep.",
+              "Cote d'Ivoire","Gabon","Ghana","Kenya","Madagascar","Malawi",
+              "Mali","Mauritania","Namibia","Niger","Nigeria","Rwanda",
+              "Senegal","Sierra Leone","Somalia","South Africa","Tanzania",
+              "Uganda","Zambia","Zimbabwe")
+ssa <- j %>%
+  mutate(label_text=ifelse(label_text %in% afr_list,label_text,NA),
+         fill=ifelse(is.na(label_text),2,1) %>% as.factor)
+
+ggplot(ssa,aes(x=m_acct,y=hdi,label=label_text)) +
+  geom_point(size=4,aes(color=fill)) +
+  geom_text_repel() +
+  theme_classic() +
+  scale_x_continuous(labels = scales::percent) +
+  xlab('Mobile money account ownership') +
+  ylab('UN Human Development Index') +
+  theme(axis.ticks=element_blank(),
+        axis.text.y = element_blank(),
+        legend.position='none')
